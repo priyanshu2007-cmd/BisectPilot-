@@ -104,6 +104,7 @@ No database configured yet. Update this section when database schemas/models are
 
 - 2026-10-19 — Deployed Antigravity AI Brain (`AI_RULES.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `ANTIGRAVITY_MASTER_PROMPT.txt`) and `ai-agent-toolkit` at `/Users/priyanshu/Documents/BisectPilot` root; configured all agents (`antigravity`, `claude-code`, `opencode`, `kilo-code`), installed all skill sets (`everything`), wired `.mcp.json` and `opencode.json`, and ran verification suites.
 - 2026-10-19 — Built `website/`: Next.js App Router landing page, deterministic replay console, `/docs`, SEO metadata/routes, responsive CSS system, Dockerfile, Makefile, README, pinned Node runtime, and lockfile.
+- 2026-10-19 — Added `.vscode/settings.json` for Explorer file nesting, clutter hiding (`files.exclude`), and fast search/watcher exclusions (`search.exclude`, `files.watcherExclude`).
 
 ## 12. Important File Map
 
@@ -113,6 +114,7 @@ Use this to decide what files should be opened.
 |---|---|
 | Memory & Rules | `AI_RULES.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `ANTIGRAVITY_MASTER_PROMPT.txt` |
 | Agent Instructions | `AGENTS.md`, `CLAUDE.md` |
+| Editor Config | `.vscode/settings.json` |
 | Skill Router | `ai-agent-toolkit/skills/skill-scout/SKILL.md`, `ai-agent-toolkit/MANIFEST.md` |
 | Skill Search & Setup | `ai-agent-toolkit/scripts/skill-search.sh`, `ai-agent-toolkit/scripts/setup-agent.sh`, `ai-agent-toolkit/scripts/install-skills.sh` |
 | MCP Config | `.mcp.json`, `opencode.json`, `ai-agent-toolkit/guides/MCP_SETUP.md` |
@@ -121,18 +123,12 @@ Use this to decide what files should be opened.
 ## 13. Current Task Context
 
 Current task:
-Implemented the `website-builder` skill as a complete BisectPilot website in `website/`.
+Configured `.vscode/settings.json` to keep the VS Code/Antigravity Explorer minimal, organized via file nesting, and fast by excluding generated directories from search and file watching.
 
 Relevant files:
+- `.vscode/settings.json`
 - `AI_RULES.md`
 - `AI_BRAIN.md`
-- `SESSION_MEMORY.md`
-- `AGENTS.md`
-- `CLAUDE.md`
-- `.mcp.json`
-- `opencode.json`
-- `ai-agent-toolkit/`
-- `website/`
 
 Do not open unrelated files.
 
