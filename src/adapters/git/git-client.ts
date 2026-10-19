@@ -283,3 +283,73 @@ export async function runGitDoctor(targetPath = "."): Promise<DoctorReport> {
     checks,
   };
 }
+
+export async function getGoodEndpointDiscoveryCandidates(
+  cwd: string,
+  badSha: string,
+  maxSteps = 16
+): Promise<string[]> {
+  const resolvedBad = await resolveRefToSha(cwd, badSha);
+  const candidatesWithDistance: Array<{ sha: string; distance: number }> = [];
+  const seenShas = new Set<string>([resolvedBad]);
+
+  // 1. Gather reachable tag candidates that are ancestors of badSha
+  const tagListRes = await runGit(["tag", "--merged", resolvedBad], cwd);
+  if (tagListRes.exitCode === 0 && tagListRes.stdout.length > 0) {
+    const tagNames = tagListRes.stdout.split("\n").map((t) => t.trim()).filter(Boolean);
+    for (const tag of tagNames) {
+      try {
+        const tagSha = await resolveRefToSha(cwd, tag);
+        if (!seenShas.has(tagSha) && (await isAncestor(cwd, tagSha, resolvedBad))) {
+          const dist = await countCommitsBetween(cwd, tagSha, resolvedBad);
+          if (dist > 0) {
+            candidatesWithDistance.push({ sha: tagSha, distance: dist });
+            seenShas.add(tagSha);
+          }
+        }
+      } catch {
+        // Ignore unresolvable tag
+      }
+    }
+  }
+
+  // 2. Exponential commit distances: 1, 2, 4, 8, 16, 32, 64, 128, ...
+  let currentDistance = 1;
+  let exhausted = false;
+
+  for (let step = 0; step < maxSteps && !exhausted; step++) {
+    const revRes = await runGit(["rev-parse", "--verify", `${resolvedBad}~${currentDistance}^{commit}`], cwd);
+    if (revRes.exitCode === 0 && /^[0-9a-f]{40}$/i.test(revRes.stdout)) {
+      const sha = revRes.stdout.toLowerCase();
+      if (!seenShas.has(sha) && (await isAncestor(cwd, sha, resolvedBad))) {
+        candidatesWithDistance.push({ sha, distance: currentDistance });
+        seenShas.add(sha);
+      }
+      currentDistance *= 2;
+    } else {
+      exhausted = true;
+    }
+  }
+
+  // 3. If history was exhausted, try to also include the oldest root ancestor commit if not already seen
+  const rootRes = await runGit(["rev-list", "--max-parents=0", resolvedBad], cwd);
+  if (rootRes.exitCode === 0 && rootRes.stdout.length > 0) {
+    const rootShas = rootRes.stdout
+      .split("\n")
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => /^[0-9a-f]{40}$/.test(s));
+    for (const rootSha of rootShas) {
+      if (!seenShas.has(rootSha) && (await isAncestor(cwd, rootSha, resolvedBad))) {
+        const dist = await countCommitsBetween(cwd, rootSha, resolvedBad);
+        if (dist > 0) {
+          candidatesWithDistance.push({ sha: rootSha, distance: dist });
+          seenShas.add(rootSha);
+        }
+      }
+    }
+  }
+
+  // Sort candidates by commit distance ascending (closest ancestor to badSha first)
+  candidatesWithDistance.sort((a, b) => a.distance - b.distance);
+  return candidatesWithDistance.map((c) => c.sha);
+}

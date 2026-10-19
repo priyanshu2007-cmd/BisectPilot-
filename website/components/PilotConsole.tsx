@@ -1,40 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type TurnKind,
+  type Turn,
+  type Scenario,
+  isValidScenario,
+  normalizeImportedJson,
+} from "@/lib/report-adapter";
 
-export type TurnKind = "prompt" | "tool" | "model" | "result";
-
-export type Turn = {
-  id: string;
-  time: string;
-  latencyMs: number;
-  baselineLatencyMs: number;
-  label: string;
-  kind: TurnKind;
-  summary: string;
-  baselineOutput: string;
-  currentOutput: string;
-  detail: string;
-  changed: boolean;
-  firstDrift?: boolean;
-  metric: string;
-  commitRef: string;
-  sourceSpan: string;
-};
-
-export type Scenario = {
-  id: string;
-  name: string;
-  currentRunId: string;
-  baselineRunId: string;
-  branch: string;
-  commit: string;
-  model: string;
-  firstDriftTurn: string;
-  driftScore: string;
-  toolCallDelta: string;
-  turns: Turn[];
-};
+export type { TurnKind, Turn, Scenario };
+export { isValidScenario };
 
 export const SCENARIOS: Scenario[] = [
   {
@@ -254,26 +230,6 @@ type NoteItem = {
   text: string;
 };
 
-function isValidScenario(value: unknown): value is Scenario {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.id === "string" &&
-    typeof candidate.name === "string" &&
-    typeof candidate.firstDriftTurn === "string" &&
-    Array.isArray(candidate.turns) &&
-    candidate.turns.length > 0 &&
-    candidate.turns.every(
-      (turn) =>
-        turn &&
-        typeof turn === "object" &&
-        typeof (turn as Record<string, unknown>).id === "string" &&
-        typeof (turn as Record<string, unknown>).baselineOutput === "string" &&
-        typeof (turn as Record<string, unknown>).currentOutput === "string"
-    )
-  );
-}
-
 export default function PilotConsole({ fullPage = false }: { fullPage?: boolean }) {
   const [scenarios, setScenarios] = useState<Scenario[]>(SCENARIOS);
   const [scenarioId, setScenarioId] = useState<string>(SCENARIOS[0].id);
@@ -425,28 +381,45 @@ export default function PilotConsole({ fullPage = false }: { fullPage?: boolean 
     setIsPlaying(false);
   }
 
-  async function handleImportScenarioFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
+  async function importJsonFile(file: File) {
     if (file.size > 2 * 1024 * 1024) {
       setImportStatus("Import rejected: file exceeds 2 MB limit");
       return;
     }
     try {
       const parsed: unknown = JSON.parse(await file.text());
-      if (!isValidScenario(parsed)) {
-        setImportStatus("Import rejected: invalid Scenario JSON schema");
+      const res = normalizeImportedJson(parsed);
+      if (!res.ok) {
+        setImportStatus(res.error);
         return;
       }
-      setScenarios((prev) => [parsed, ...prev.filter((item) => item.id !== parsed.id)]);
-      setScenarioId(parsed.id);
-      setActiveTurnId(parsed.firstDriftTurn);
+      const loaded = res.scenario;
+      setScenarios((prev) => [loaded, ...prev.filter((item) => item.id !== loaded.id)]);
+      setScenarioId(loaded.id);
+      setActiveTurnId(loaded.firstDriftTurn);
       setIsPlaying(false);
-      setImportStatus(`Loaded ${parsed.name} (first drift: Turn ${parsed.firstDriftTurn})`);
+      setImportStatus(
+        res.sourceFormat === "cli_report"
+          ? `Loaded CLI Report ${loaded.currentRunId} (first drift: Turn ${loaded.firstDriftTurn})`
+          : `Loaded ${loaded.name} (first drift: Turn ${loaded.firstDriftTurn})`
+      );
     } catch {
       setImportStatus("Import rejected: malformed JSON file");
     }
+  }
+
+  async function handleImportScenarioFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    await importJsonFile(file);
+  }
+
+  function handleDropFile(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    void importJsonFile(file);
   }
 
   function toggleReplay() {
@@ -501,7 +474,11 @@ export default function PilotConsole({ fullPage = false }: { fullPage?: boolean 
   const activeVisibleIndex = visibleTurns.findIndex((turn) => turn.id === selectedTurn.id);
 
   return (
-    <div className={`pilot-console ${fullPage ? "pilot-console-full" : ""}`}>
+    <div
+      className={`pilot-console ${fullPage ? "pilot-console-full" : ""}`}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDropFile}
+    >
       {/* Top Toolbar */}
       <div className="console-toolbar">
         <div className="run-identity">

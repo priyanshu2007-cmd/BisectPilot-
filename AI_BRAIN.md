@@ -60,12 +60,14 @@ Do NOT store entire source files in this memory.
 - All 52 skills from `install-sets.json` (`everything` set) installed across `.agents/skills`, `.claude/skills`, `.opencode/skills`, and `.kilo/skills`.
 - Project-scoped MCP configurations (`.mcp.json` and `opencode.json`) wired for `context7`, `playwright`, and `rea`.
 - BisectPilot website implemented in `website/` with landing page, `/docs`, interactive replay console, metadata, sitemap, robots, error/404 states, and deployment files.
+- Automatic good-endpoint discovery (`--good auto`): tag and exponential commit distance discovery algorithm, ancestor safety checks, preflight verification, and seamless integration into bisection workflow.
+- CLI Report Replay adapter (`website/lib/report-adapter.ts`, `src/reports/replay-adapter.ts`): imports `bisectpilot report <id> --json` into the interactive replay console alongside existing Scenario JSON with drag-and-drop support.
 
 ### In Progress
-- Ready for BisectPilot application feature development beyond the static product specimen.
+- Additional P1 features (e.g. manual classification `--prompt`, custom terms `--terms`).
 
 ### Planned
-- Core BisectPilot application modules (to be added as requested).
+- Complete remaining master-plan sections as requested.
 
 ## 6. Important APIs / Routes
 
@@ -106,6 +108,7 @@ No database configured yet. Update this section when database schemas/models are
 - 2026-10-19 — Built `website/`: Next.js App Router landing page, deterministic replay console, `/docs`, SEO metadata/routes, responsive CSS system, Dockerfile, Makefile, README, pinned Node runtime, and lockfile.
 - 2026-10-19 — Updated `.vscode/settings.json` for ultra-clean Explorer mode (slimmed via `ponytail-review`), persisted `/learn` updates to `AI_RULES.md` and `.agents/skills/coding-and-debugging/SKILL.md`, and authored `SPEC.md` + `tasks/plan.md` + `tasks/todo.md` for `bisectpilot` CLI & `/explorer` trace integration.
 - 2026-10-20 — Organized and implemented the BisectPilot v3 microlithic TypeScript/Node.js engine (`src/contracts/`, `src/config/`, `src/domain/`, `src/git/`, `src/worktree/`, `src/process/`, `src/oracle/`, `src/ledger/`, `src/session/`, `src/runner/`, `src/reports/`, `src/application/`, `src/cli/`) while preserving `src/bisectpilot/__init__.py`, `website/`, and `ai-agent-toolkit/` intact. Verified with 13/13 TS unit/integration tests and 4/4 Python tests.
+- 2026-10-20 — Executed and validated all 72 AI skills across the repository under Ponytail rules, running comprehensive test, security, complexity, and frontend audits; generated root `SKILL_EXECUTION_REPORT.md` (57 PASS, 1 PARTIAL, 7 BLOCKED, 7 NOT APPLICABLE, 0 UNAVAILABLE, 0 FAILED).
 
 ## 12. Important File Map
 
@@ -118,6 +121,7 @@ Use this to decide what files should be opened.
 | Editor Config | `.vscode/settings.json` |
 | Architecture & Safety Docs | `docs/architecture.md`, `docs/safety-model.md`, `docs/handoff.md`, `docs/decisions/0001-phase-g0-contracts-and-ts-scaffold.md` |
 | TS Microlithic Engine | `src/contracts/`, `src/git/`, `src/worktree/`, `src/process/`, `src/oracle/`, `src/ledger/`, `src/session/`, `src/runner/`, `src/application/`, `src/reports/`, `src/cli/` |
+| Test Suites & Fixtures | `tests/unit/`, `tests/integration/`, `tests/safety/`, `tests/fixtures/repo-builder.ts` |
 | Python Trace Diff CLI | `src/bisectpilot/__init__.py`, `pyproject.toml`, `tests/test_bisectpilot.py` |
 | Skill Router | `ai-agent-toolkit/skills/skill-scout/SKILL.md`, `ai-agent-toolkit/MANIFEST.md` |
 | Skill Search & Setup | `ai-agent-toolkit/scripts/skill-search.sh`, `ai-agent-toolkit/scripts/setup-agent.sh`, `ai-agent-toolkit/scripts/install-skills.sh` |
@@ -127,26 +131,53 @@ Use this to decide what files should be opened.
 ## 13. Current Task Context
 
 Current task:
-Completed non-destructive microlithic architecture cleanup and engine implementation (`G0` + `A1`–`A10`) on `agent-a/engine`, preserving all existing Python, website, and toolkit assets.
+Step 3 completed: Interactive oracle classification (`--prompt`) with human-in-the-loop choices `(g)ood`, `(b)ad`, `(s)kip` (recorded as `classifiedBy: "human"`) and configurable toolchain wrapper support (`toolchainWrapper`) for per-revision historical runtimes with safe argument boundaries and secret redaction.
 
 Relevant files:
-- `src/index.ts`
-- `src/application/index.ts`
-- `docs/architecture.md`
-- `docs/safety-model.md`
-- `AI_BRAIN.md`
+- `src/contracts/config.ts`
+- `src/contracts/ledger.ts`
+- `src/contracts/outcome.ts`
+- `src/domain/classification.ts`
+- `src/adapters/process/process-runner.ts`
+- `src/oracle/index.ts`
+- `src/cli/index.ts`
+- `src/reports/index.ts`
+- `tests/unit/prompt-oracle.test.ts`
+- `tests/unit/toolchain-wrapper.test.ts`
 
 Do not open unrelated files.
 
 ## 14. Last Session Summary
 
-Implemented the `website-builder` workflow as a product surface for BisectPilot:
-1. Chose a dark laboratory field-notes direction with graphite, signal-lime, orange divergence, and serif display type.
-2. Built a responsive `/` landing page with a hero signal graphic, method/story sections, workflow cards, signal table, and accessible calls to action.
-3. Built a deterministic interactive replay console: search turns, show changes only, tab views, run replay, copy run ID, and selected evidence details.
-4. Added `/docs`, metadata, canonical URLs, JSON-LD, `sitemap.xml`, `robots.txt`, a favicon, 404/error states, and reduced-motion/focus styles.
-5. Added reproducible project setup: Node pin, npm lockfile, `.env.example`, Makefile, Dockerfile, and README.
-6. `npm test` passes. HTTP smoke checks pass for `/`, `/docs`, `/robots.txt`, and `/sitemap.xml`. Playwright browser smoke testing is untested because the Python package is unavailable; Docker build is untested because the local daemon is not running.
+Completed Step 4 capabilities:
+1. **Custom Bisect Terms (`--terms <old,new>`)**:
+   - Parse and validate custom terms (`parseTermsOption`, `validateBisectTerm`).
+   - Validate distinctness, valid ref characters, and reject reserved Git subcommands (`start`, `reset`, `skip`, etc.).
+   - Mapped to Git arguments `--term-old <old> --term-new <new>` via argument arrays.
+   - Candidate parsing updated to match `is the first <term-new> commit` alongside `is the first bad commit`.
+   - Recorded in `session_created` ledger event and report metadata (`report.json` and `report.md`).
+2. **Noisy-Oracle / Bayesian Reliability Mode (`--noisy`)**:
+   - Closed-form Bayesian posterior updates ($P(\text{bad}) = \frac{1}{1 + r^{\text{passes} - \text{fails}}}$) implemented in `src/domain/bayesian.ts`.
+   - Multi-sampling loop in `evaluateCheckedOutRevision` with early stopping upon reaching confidence threshold.
+   - Budget exhaustion falls back to `skip` (`skip_budget_exceeded`).
+   - Endpoint preflight handles tolerable flake rate ($\le \alpha$).
+   - Boundary confirmation applies Bayesian reliability policy.
+   - Provenance (`sampleCount`, `passedRuns`, `failedRuns`, `skippedRuns`, `posterior`, `confidenceThreshold`) recorded in `revision_classified` and reports.
+3. **Standalone Reproducibility Bundle (`repro.sh`)**:
+   - Generates executable (`0o755`) standalone script with prerequisite validation (`git`, `REPO_ROOT`, commits).
+   - Enforces deterministic environment defaults (`CI=1`, `TZ=UTC`, `LANG=C.UTF-8`, `NO_COLOR=1`, etc.).
+   - Employs POSIX single-quote escaping for all arguments (`shQuote`) to prevent command injection.
+   - Emits contract output: `parent: <result>, candidate: <result>` and exits 0 on reproduced regression boundary.
+4. **Release-Hardening**:
+   - Cross-platform GitHub Actions CI matrix created in `.github/workflows/ci.yml` (`ubuntu-latest`, `macos-latest`, `windows-latest` across Node 20 & 22).
+   - Windows `taskkill` process termination verified with unit tests and safe `ENOENT` handling on non-Windows test environments.
+   - `braces` security advisory addressed via override in `website/package.json`; verified installed `braces@3.0.3` is current.
+   - `FakeEngine` moved to `tests/fixtures/fake-engine.ts` with backward-compatible re-export in `src/contracts/engine.ts`.
+5. **Validation**:
+   - 85 passing tests (11 suites) with 0 failures (`npm test`).
+   - 4 passing Python tests with 0 failures (`PYTHONPATH=src python3 -m unittest discover -s tests -p "*.py"`).
+   - Website test passes: typecheck, lint, build clean (`npm --prefix website run test`).
+   - `git diff --check` passes cleanly.
 
 ---
 

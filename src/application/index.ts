@@ -20,6 +20,7 @@ import {
   countCommitsBetween,
   getCurrentHead,
   getFirstParentSha,
+  getGoodEndpointDiscoveryCandidates,
   isAncestor,
   isWorkingTreeDirty,
   resolveCommonGitDir,
@@ -29,7 +30,13 @@ import {
   runGitDoctor,
 } from "../git/index.js";
 import { appendLedgerEvent, readLedgerEvents, verifyLedgerChain } from "../ledger/index.js";
-import { evaluateCheckedOutRevision, sha256File, snapshotOverlayFiles } from "../oracle/index.js";
+import {
+  evaluateCheckedOutRevision,
+  sha256File,
+  snapshotExternalScript,
+  snapshotOverlayFiles,
+} from "../oracle/index.js";
+import { writeSessionReportArtifacts } from "../reports/index.js";
 import {
   acquireSessionLock,
   detectCrashNeedsRecovery,
@@ -140,8 +147,10 @@ async function runEndpointKTimes(params: {
   return { passed, failed, skipped, aborted };
 }
 
-function parseFirstBadShaFromBisectOutput(output: string): string | undefined {
-  const match = /\b([0-9a-f]{40}) is the first bad commit\b/i.exec(output);
+function parseFirstBadShaFromBisectOutput(output: string, termNew = "bad"): string | undefined {
+  const escapedTerm = termNew.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`\\b([0-9a-f]{40}) is the first (?:${escapedTerm}|bad) commit\\b`, "i");
+  const match = regex.exec(output);
   return match ? match[1]!.toLowerCase() : undefined;
 }
 
@@ -152,13 +161,48 @@ export class LocalBisectEngine implements BisectEngine {
 
   async plan(config: BisectConfigV1): Promise<BisectPlanReport> {
     const repoRoot = await resolveRepoRoot(config.repositoryRoot);
-    const goodSha = await resolveRefToSha(repoRoot, config.goodRef);
     const badSha = await resolveRefToSha(repoRoot, config.badRef);
+    const dirty = await isWorkingTreeDirty(repoRoot);
+    const warnings: string[] = [];
+
+    if (config.goodRef === "auto") {
+      const candidates = await getGoodEndpointDiscoveryCandidates(repoRoot, badSha);
+      if (dirty) {
+        warnings.push(
+          "Original working tree has uncommitted changes (BisectPilot will preserve them in place and bisect in an isolated detached worktree)."
+        );
+      }
+      if (candidates.length === 0) {
+        return {
+          ok: false,
+          repoRoot,
+          goodSha: "auto",
+          badSha,
+          isLinearAncestor: false,
+          estimatedCommitsBetween: 0,
+          estimatedSteps: 0,
+          originalWasDirty: dirty,
+          warnings: ["badRef has no ancestors in repository; automatic good discovery impossible."],
+        };
+      }
+      warnings.push("goodRef is set to auto; good endpoint will be discovered dynamically from ancestor candidates.");
+      return {
+        ok: true,
+        repoRoot,
+        goodSha: "auto",
+        badSha,
+        isLinearAncestor: true,
+        estimatedCommitsBetween: candidates.length,
+        estimatedSteps: Math.ceil(Math.log2(candidates.length + 1)),
+        originalWasDirty: dirty,
+        warnings,
+      };
+    }
+
+    const goodSha = await resolveRefToSha(repoRoot, config.goodRef);
     const linear = await isAncestor(repoRoot, goodSha, badSha);
     const commitsBetween = await countCommitsBetween(repoRoot, goodSha, badSha);
     const steps = commitsBetween > 0 ? Math.ceil(Math.log2(commitsBetween + 1)) : 0;
-    const dirty = await isWorkingTreeDirty(repoRoot);
-    const warnings: string[] = [];
 
     if (!linear) {
       warnings.push("goodRef is not a direct ancestor of badRef; non-linear history detected.");
@@ -184,6 +228,9 @@ export class LocalBisectEngine implements BisectEngine {
 
   async start(config: BisectConfigV1, options?: StartSessionOptions): Promise<SessionManifestV1> {
     const planReport = await this.plan(config);
+    if (!planReport.ok) {
+      throw new Error(`Cannot start bisection plan: ${planReport.warnings.join("; ") || "invalid bounds"}`);
+    }
     const sessionId = options?.sessionId ?? `bp-${randomUUID().slice(0, 8)}`;
     const sessionsBase = defaultSessionRootDir(planReport.repoRoot, config.sessionRootDir);
     const sessionDir = path.join(sessionsBase, sessionId);
@@ -196,11 +243,21 @@ export class LocalBisectEngine implements BisectEngine {
     try {
       const commonGitDir = await resolveCommonGitDir(planReport.repoRoot);
       const originalHead = await getCurrentHead(planReport.repoRoot);
-      const overlayHashes =
+      const overlayHashes: Record<string, string> =
         config.oracle.mode === "overlay" && config.oracle.overlayFiles
           ? snapshotOverlayFiles(planReport.repoRoot, sessionDir, config.oracle.overlayFiles)
           : {};
 
+      if (config.oracle.mode === "external" && config.oracle.externalScriptPath) {
+        const ext = snapshotExternalScript(
+          planReport.repoRoot,
+          sessionDir,
+          config.oracle.externalScriptPath
+        );
+        overlayHashes[`external:${path.basename(config.oracle.externalScriptPath)}`] = ext.sha256;
+      }
+
+      const initialCommitSha = config.goodRef === "auto" ? planReport.badSha : planReport.goodSha;
       const repoMeta = await createSessionWorktree({
         sessionId,
         repoRoot: planReport.repoRoot,
@@ -208,7 +265,7 @@ export class LocalBisectEngine implements BisectEngine {
         originalHead,
         originalWasDirty: planReport.originalWasDirty,
         worktreePath: worktreeDir,
-        initialCommitSha: planReport.goodSha,
+        initialCommitSha,
       });
 
       const now = new Date().toISOString();
@@ -245,9 +302,14 @@ export class LocalBisectEngine implements BisectEngine {
           badSha: planReport.badSha,
           worktreePath: repoMeta.worktreePath,
           overlayHashes,
+          ...(config.terms ? { terms: config.terms } : {}),
         },
         options?.onEvent
       );
+
+      if (config.goodRef === "auto") {
+        return await this.discoverGoodEndpointAndRun(manifest, planReport, options);
+      }
 
       if (config.execution.confirmBeforeExecutingCode && options?.confirm) {
         manifest = transitionSessionState(manifest, "awaiting_consent", "Requesting user consent", options?.onEvent);
@@ -265,11 +327,221 @@ export class LocalBisectEngine implements BisectEngine {
     }
   }
 
+  private async discoverGoodEndpointAndRun(
+    initialManifest: SessionManifestV1,
+    planReport: BisectPlanReport,
+    options?: StartSessionOptions
+  ): Promise<SessionManifestV1> {
+    let manifest = initialManifest;
+
+    if (options?.abortSignal?.aborted) {
+      return this.cancelSession(manifest, options);
+    }
+
+    manifest = transitionSessionState(
+      manifest,
+      "preflight_running",
+      "Validating bad endpoint before good-endpoint discovery",
+      options?.onEvent
+    );
+
+    // 1. Evaluate bad endpoint
+    const badOutcome = await evaluateCheckedOutRevision({
+      sessionId: manifest.id,
+      sessionDir: manifest.sessionDir,
+      ledgerPath: manifest.ledgerPath,
+      worktreePath: manifest.repository.worktreePath,
+      commitSha: manifest.bounds.badSha,
+      config: manifest.config,
+      overlayHashes: manifest.overlayHashes,
+      phasePrefix: "preflight_bad",
+      abortSignal: options?.abortSignal,
+      onEvent: options?.onEvent,
+    });
+
+    if (options?.abortSignal?.aborted) {
+      return this.cancelSession(manifest, options);
+    }
+
+    if (badOutcome.kind === "good") {
+      return this.concludeSession(
+        manifest,
+        {
+          outcome: "inconclusive",
+          skippedShas: [],
+          explanation:
+            "Automatic discovery failed: bad endpoint passed oracle (cannot establish regression baseline when bad endpoint does not fail).",
+        },
+        options
+      );
+    }
+
+    if (badOutcome.kind === "abort") {
+      return this.concludeSession(
+        manifest,
+        {
+          outcome: "aborted",
+          skippedShas: [],
+          explanation: `Bad endpoint execution aborted: ${badOutcome.detail}`,
+        },
+        options
+      );
+    }
+
+    // 2. Discover ancestor candidates using tags and exponential distances
+    const candidates = await getGoodEndpointDiscoveryCandidates(
+      planReport.repoRoot,
+      manifest.bounds.badSha
+    );
+
+    let discoveredGoodSha: string | null = null;
+
+    for (const candidateSha of candidates) {
+      if (options?.abortSignal?.aborted) {
+        return this.cancelSession(manifest, options);
+      }
+
+      const coRes = await runGit(
+        ["checkout", "--detach", candidateSha],
+        manifest.repository.worktreePath
+      );
+      if (coRes.exitCode !== 0) continue;
+
+      await resetOwnedWorktree(manifest, {
+        cleanIgnored: manifest.config.execution.cleanIgnored,
+        overlayRelativePaths: manifest.config.oracle.overlayFiles,
+      });
+
+      const candOutcome = await evaluateCheckedOutRevision({
+        sessionId: manifest.id,
+        sessionDir: manifest.sessionDir,
+        ledgerPath: manifest.ledgerPath,
+        worktreePath: manifest.repository.worktreePath,
+        commitSha: candidateSha,
+        config: manifest.config,
+        overlayHashes: manifest.overlayHashes,
+        phasePrefix: "preflight_good",
+        abortSignal: options?.abortSignal,
+        onEvent: options?.onEvent,
+      });
+
+      await resetOwnedWorktree(manifest, {
+        cleanIgnored: manifest.config.execution.cleanIgnored,
+        overlayRelativePaths: manifest.config.oracle.overlayFiles,
+      });
+
+      appendLedgerEvent(
+        manifest.ledgerPath,
+        {
+          type: "boundary_check",
+          sessionId: manifest.id,
+          target: "good_endpoint",
+          commitSha: candidateSha,
+          totalRuns: 1,
+          passedRuns: candOutcome.kind === "good" ? 1 : 0,
+          failedRuns: candOutcome.kind === "bad" ? 1 : 0,
+          skippedRuns: candOutcome.kind === "skip" ? 1 : 0,
+          abortedRuns: candOutcome.kind === "abort" ? 1 : 0,
+        },
+        options?.onEvent
+      );
+
+      if (candOutcome.kind === "good") {
+        discoveredGoodSha = candidateSha;
+        break;
+      }
+    }
+
+    if (!discoveredGoodSha) {
+      return this.concludeSession(
+        manifest,
+        {
+          outcome: "inconclusive",
+          skippedShas: [],
+          explanation:
+            "Automatic good-endpoint discovery exhausted candidate history without finding a commit passing the oracle.",
+        },
+        options
+      );
+    }
+
+    // 3. Update manifest and config with discovered good endpoint
+    manifest = {
+      ...manifest,
+      bounds: {
+        ...manifest.bounds,
+        goodSha: discoveredGoodSha,
+      },
+      config: {
+        ...manifest.config,
+        goodRef: discoveredGoodSha,
+      },
+    };
+    writeSessionManifestAtomic(manifest);
+
+    // 4. Request consent if configured
+    if (manifest.config.execution.confirmBeforeExecutingCode && options?.confirm) {
+      manifest = transitionSessionState(
+        manifest,
+        "awaiting_consent",
+        `Discovered good baseline: ${discoveredGoodSha}`,
+        options?.onEvent
+      );
+      const updatedPlan = await this.plan(manifest.config);
+      const approved = await options.confirm(updatedPlan);
+      if (!approved) {
+        manifest = transitionSessionState(
+          manifest,
+          "cancelled",
+          "User declined consent after good-endpoint discovery",
+          options?.onEvent
+        );
+        return manifest;
+      }
+    }
+
+    manifest = transitionSessionState(
+      manifest,
+      "worktree_ready",
+      `Discovered good endpoint ${discoveredGoodSha}; ready for bisection`,
+      options?.onEvent
+    );
+
+    // 5. Continue to bisection (skip preflight since endpoints were already verified during discovery)
+    return await this.executeInvestigationFromWorktreeReady(manifest, {
+      ...options,
+      skipPreflight: true,
+    });
+  }
+
+  private cancelSession(
+    manifest: SessionManifestV1,
+    options?: StartSessionOptions
+  ): SessionManifestV1 {
+    let next = transitionSessionState(
+      manifest,
+      "cancel_requested",
+      "Cancellation requested via AbortSignal",
+      options?.onEvent
+    );
+    next = transitionSessionState(
+      next,
+      "cancelled",
+      "Session cancelled cleanly",
+      options?.onEvent
+    );
+    return next;
+  }
+
   private async executeInvestigationFromWorktreeReady(
     initialManifest: SessionManifestV1,
     options?: StartSessionOptions
   ): Promise<SessionManifestV1> {
     let manifest = initialManifest;
+
+    if (options?.abortSignal?.aborted) {
+      return this.cancelSession(manifest, options);
+    }
 
     if (!options?.skipPreflight) {
       manifest = transitionSessionState(
@@ -288,6 +560,10 @@ export class LocalBisectEngine implements BisectEngine {
         abortSignal: options?.abortSignal,
         onEvent: options?.onEvent,
       });
+
+      if (options?.abortSignal?.aborted) {
+        return this.cancelSession(manifest, options);
+      }
 
       if (goodCheck.aborted > 0) {
         return this.concludeSession(
@@ -309,6 +585,10 @@ export class LocalBisectEngine implements BisectEngine {
         abortSignal: options?.abortSignal,
         onEvent: options?.onEvent,
       });
+
+      if (options?.abortSignal?.aborted) {
+        return this.cancelSession(manifest, options);
+      }
 
       if (badCheck.aborted > 0) {
         return this.concludeSession(
@@ -335,17 +615,36 @@ export class LocalBisectEngine implements BisectEngine {
         );
       }
 
-      if (goodCheck.passed < k || badCheck.failed < k) {
-        return this.concludeSession(
-          manifest,
-          {
-            outcome: "inconclusive",
-            inconclusiveReason: "oracle_flaky_at_endpoints",
-            skippedShas: [],
-            explanation: `Flaky oracle at endpoints: good passed ${goodCheck.passed}/${k}, bad failed ${badCheck.failed}/${k}.`,
-          },
-          options
-        );
+      const noisyPolicy = manifest.config.execution.noisyOracle;
+      if (noisyPolicy?.enabled) {
+        const maxFlakeRate = noisyPolicy.flakeRate ?? 0.10;
+        const goodFailRate = goodCheck.failed / k;
+        const badPassRate = badCheck.passed / k;
+        if (goodFailRate > maxFlakeRate || badPassRate > maxFlakeRate) {
+          return this.concludeSession(
+            manifest,
+            {
+              outcome: "inconclusive",
+              inconclusiveReason: "oracle_flaky_at_endpoints",
+              skippedShas: [],
+              explanation: `Oracle flake rate at endpoints exceeds tolerable limit (${(maxFlakeRate * 100).toFixed(1)}%): good failed ${(goodFailRate * 100).toFixed(1)}% (${goodCheck.failed}/${k}), bad passed ${(badPassRate * 100).toFixed(1)}% (${badCheck.passed}/${k}).`,
+            },
+            options
+          );
+        }
+      } else {
+        if (goodCheck.passed < k || badCheck.failed < k) {
+          return this.concludeSession(
+            manifest,
+            {
+              outcome: "inconclusive",
+              inconclusiveReason: "oracle_flaky_at_endpoints",
+              skippedShas: [],
+              explanation: `Flaky oracle at endpoints: good passed ${goodCheck.passed}/${k}, bad failed ${badCheck.failed}/${k}.`,
+            },
+            options
+          );
+        }
       }
 
       manifest = transitionSessionState(
@@ -366,10 +665,13 @@ export class LocalBisectEngine implements BisectEngine {
     const worktreePath = manifest.repository.worktreePath;
     await runGit(["bisect", "reset"], worktreePath).catch(() => undefined);
 
-    const startRes = await runGit(
-      ["bisect", "start", manifest.bounds.badSha, manifest.bounds.goodSha],
-      worktreePath
-    );
+    const startArgs = ["bisect", "start"];
+    if (manifest.config.terms) {
+      startArgs.push(`--term-old=${manifest.config.terms.old}`, `--term-new=${manifest.config.terms.new}`);
+    }
+    startArgs.push(manifest.bounds.badSha, manifest.bounds.goodSha);
+
+    const startRes = await runGit(startArgs, worktreePath);
     if (startRes.exitCode !== 0) {
       return this.concludeSession(
         manifest,
@@ -413,7 +715,8 @@ export class LocalBisectEngine implements BisectEngine {
           skippedShas,
           explanation: `Skip budget exceeded (${manifest.skipCount} > ${manifest.config.execution.maxSkips}).`,
         },
-        options
+        options,
+        bisectLogRes.stdout
       );
     }
 
@@ -428,12 +731,13 @@ export class LocalBisectEngine implements BisectEngine {
             ? `Bisect aborted at ${abortedEvent.commitSha.slice(0, 8)} (${abortedEvent.reasonCode}): ${abortedEvent.detail}`
             : `git bisect run aborted (exit ${runRes.exitCode}): ${runRes.stderr || runRes.stdout}`,
         },
-        options
+        options,
+        bisectLogRes.stdout
       );
     }
 
     const combinedOutput = `${runRes.stdout}\n${bisectLogRes.stdout}`;
-    const candidateSha = parseFirstBadShaFromBisectOutput(combinedOutput);
+    const candidateSha = parseFirstBadShaFromBisectOutput(combinedOutput, manifest.config.terms?.new);
 
     if (!candidateSha) {
       if (skippedShas.length > 0) {
@@ -445,7 +749,8 @@ export class LocalBisectEngine implements BisectEngine {
             skippedShas,
             explanation: "Skipped revisions prevented isolating a single commit; reporting candidate range.",
           },
-          options
+          options,
+          bisectLogRes.stdout
         );
       }
       return this.concludeSession(
@@ -455,7 +760,8 @@ export class LocalBisectEngine implements BisectEngine {
           skippedShas,
           explanation: `Could not parse first bad commit from git bisect output: ${runRes.stdout}`,
         },
-        options
+        options,
+        bisectLogRes.stdout
       );
     }
 
@@ -486,7 +792,12 @@ export class LocalBisectEngine implements BisectEngine {
       onEvent: options?.onEvent,
     });
 
-    const confirmed = candConfirm.failed === confirmRuns && parentConfirm.passed === confirmRuns;
+    const noisyPolicy = manifest.config.execution.noisyOracle;
+    const confirmed = noisyPolicy?.enabled
+      ? candConfirm.failed / confirmRuns >= 1 - (noisyPolicy.flakeRate ?? 0.10) &&
+        parentConfirm.passed / confirmRuns >= 1 - (noisyPolicy.flakeRate ?? 0.10)
+      : candConfirm.failed === confirmRuns && parentConfirm.passed === confirmRuns;
+    const firstBadLabel = manifest.config.terms?.new ? `first ${manifest.config.terms.new}` : "first bad";
     return this.concludeSession(
       manifest,
       {
@@ -495,17 +806,19 @@ export class LocalBisectEngine implements BisectEngine {
         parentSha,
         skippedShas,
         explanation: confirmed
-          ? `Confirmed ${candidateSha} as first bad commit (${confirmRuns}/${confirmRuns} bad; parent ${parentSha.slice(0, 8)} ${confirmRuns}/${confirmRuns} good).`
+          ? `Confirmed ${candidateSha} as ${firstBadLabel} commit (${candConfirm.failed}/${confirmRuns} bad; parent ${parentSha.slice(0, 8)} ${parentConfirm.passed}/${confirmRuns} good).`
           : `Candidate ${candidateSha} identified by git bisect, but boundary confirmation varied (candidate bad ${candConfirm.failed}/${confirmRuns}, parent good ${parentConfirm.passed}/${confirmRuns}).`,
       },
-      options
+      options,
+      bisectLogRes.stdout
     );
   }
 
   private async concludeSession(
     manifest: SessionManifestV1,
     conclusion: SessionConclusion,
-    options?: StartSessionOptions
+    options?: StartSessionOptions,
+    bisectLogText?: string
   ): Promise<SessionManifestV1> {
     let next = transitionSessionState(
       manifest,
@@ -528,6 +841,13 @@ export class LocalBisectEngine implements BisectEngine {
       },
       options?.onEvent
     );
+
+    const events = readLedgerEvents(next.ledgerPath);
+    writeSessionReportArtifacts({
+      manifest: next,
+      events,
+      ...(bisectLogText ? { bisectLogText } : {}),
+    });
 
     if (options?.autoCleanup) {
       await this.cleanup(next.id, { dryRun: false }, path.dirname(next.sessionDir));
@@ -556,8 +876,14 @@ export class LocalBisectEngine implements BisectEngine {
     };
   }
 
-  async resume(sessionId: string, options?: StartSessionOptions): Promise<SessionManifestV1> {
-    const baseDir = path.resolve(process.env.BISECTPILOT_SESSION_ROOT ?? ".bisectpilot/sessions");
+  async resume(
+    sessionId: string,
+    options?: StartSessionOptions,
+    sessionRootDir?: string
+  ): Promise<SessionManifestV1> {
+    const baseDir = sessionRootDir
+      ? path.resolve(sessionRootDir)
+      : path.resolve(process.env.BISECTPILOT_SESSION_ROOT ?? ".bisectpilot/sessions");
     const sessionDir = path.join(baseDir, sessionId);
     let manifest = readSessionManifest(sessionDir);
     manifest = detectCrashNeedsRecovery(manifest, options?.onEvent);
@@ -572,6 +898,14 @@ export class LocalBisectEngine implements BisectEngine {
     }
 
     for (const [relPath, expectedHash] of Object.entries(manifest.overlayHashes)) {
+      if (relPath.startsWith("external:")) {
+        const extName = relPath.slice("external:".length);
+        const extFile = path.resolve(manifest.sessionDir, "external", extName);
+        if (!existsSync(extFile) || sha256File(extFile) !== expectedHash) {
+          throw new Error(`External script snapshot integrity check failed for ${extName}`);
+        }
+        continue;
+      }
       const snapFile = path.resolve(manifest.sessionDir, "overlays", relPath);
       if (!existsSync(snapFile) || sha256File(snapFile) !== expectedHash) {
         throw new Error(`Overlay snapshot integrity check failed for ${relPath}`);

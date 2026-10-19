@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import type { CommandSpec, ExecutionPolicy } from "../../contracts/index.js";
+import type { CommandSpec, ExecutionPolicy, ToolchainWrapperSpec } from "../../contracts/index.js";
 import { buildRestrictedEnvironment } from "./environment-policy.js";
 
 export interface ProcessRunOptions {
@@ -9,6 +9,26 @@ export interface ProcessRunOptions {
   readonly executionPolicy: ExecutionPolicy;
   readonly abortSignal?: AbortSignal;
   readonly killGraceMs?: number;
+  readonly detectedToolchainVersion?: string;
+}
+
+export function applyToolchainWrapper(
+  commandSpec: CommandSpec,
+  wrapper?: ToolchainWrapperSpec,
+  detectedVersion?: string
+): { readonly command: string; readonly args: readonly string[] } {
+  if (!wrapper) {
+    return { command: commandSpec.command, args: commandSpec.args };
+  }
+  const rawArgs = wrapper.args ?? [];
+  const expandedArgs = rawArgs.map((arg) => {
+    if (!detectedVersion) return arg;
+    return arg.replace(/<version>/g, detectedVersion).replace(/\$\{version\}/g, detectedVersion);
+  });
+  return {
+    command: wrapper.command,
+    args: [...expandedArgs, commandSpec.command, ...commandSpec.args],
+  };
 }
 
 export interface ProcessRunResult {
@@ -31,17 +51,20 @@ export interface ProcessRunResult {
   readonly stderrSha256: string;
 }
 
-function terminateProcessTree(
+export function terminateProcessTree(
   pid: number,
   graceMs: number,
-  onSignalSent: (sig: "SIGTERM" | "SIGKILL" | "taskkill") => void
+  onSignalSent: (sig: "SIGTERM" | "SIGKILL" | "taskkill") => void,
+  platformOverride?: NodeJS.Platform
 ): void {
-  if (process.platform === "win32") {
+  const platform = platformOverride ?? process.platform;
+  if (platform === "win32") {
     onSignalSent("taskkill");
     const killer = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
       shell: false,
       stdio: "ignore",
     });
+    killer.on("error", () => undefined);
     killer.unref();
     return;
   }
@@ -77,9 +100,14 @@ function terminateProcessTree(
 
 export async function runSafeProcess(options: ProcessRunOptions): Promise<ProcessRunResult> {
   const startTime = Date.now();
-  const rawCommand = options.commandSpec.command;
+  const wrapped = applyToolchainWrapper(
+    options.commandSpec,
+    options.executionPolicy.toolchainWrapper,
+    options.detectedToolchainVersion
+  );
+  const rawCommand = wrapped.command;
   const executable = rawCommand === "node" ? process.execPath : rawCommand;
-  const args = [...options.commandSpec.args];
+  const args = [...wrapped.args];
   const maxBytes = options.executionPolicy.maxOutputBytesPerCommand;
   const graceMs = options.killGraceMs ?? 5_000;
   const isPosix = process.platform !== "win32";

@@ -30,6 +30,23 @@ export interface OracleSpec {
   readonly externalScriptPath?: string;
 }
 
+export interface ToolchainWrapperSpec {
+  readonly command: string;
+  readonly args?: readonly string[];
+}
+
+export interface CustomBisectTerms {
+  readonly old: string;
+  readonly new: string;
+}
+
+export interface NoisyOraclePolicy {
+  readonly enabled: boolean;
+  readonly maxSamplesPerRevision?: number;
+  readonly confidenceThreshold?: number;
+  readonly flakeRate?: number;
+}
+
 export interface ExecutionPolicy {
   readonly maxOutputBytesPerCommand: number;
   readonly maxRetries: number;
@@ -41,6 +58,9 @@ export interface ExecutionPolicy {
   readonly allowlistedEnvVars: readonly string[];
   readonly envOverrides?: Readonly<Record<string, string>>;
   readonly enforceNodeToolchainCheck?: boolean;
+  readonly interactivePrompt?: boolean;
+  readonly toolchainWrapper?: ToolchainWrapperSpec;
+  readonly noisyOracle?: NoisyOraclePolicy;
 }
 
 export interface BisectConfigV1 {
@@ -50,6 +70,7 @@ export interface BisectConfigV1 {
   readonly workingDirectory: string;
   readonly goodRef: string;
   readonly badRef: string;
+  readonly terms?: CustomBisectTerms;
   readonly prepare?: CommandSpec;
   readonly build?: BuildCommandSpec;
   readonly oracle: OracleSpec;
@@ -77,6 +98,54 @@ export const DETERMINISTIC_ENV_DEFAULTS: Readonly<Record<string, string>> = Obje
   npm_config_update_notifier: "false",
 });
 
+export function validateBisectTerm(term: string): { ok: boolean; reason?: string } {
+  if (!term || typeof term !== "string") {
+    return { ok: false, reason: "Term must be a non-empty string" };
+  }
+  const trimmed = term.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, reason: "Term cannot be empty or whitespace" };
+  }
+  if (/\s/.test(trimmed)) {
+    return { ok: false, reason: "Term cannot contain whitespace" };
+  }
+  if (/[\x00-\x1f\x7f~^:?*\[\\@]/.test(trimmed) || trimmed.includes("..") || trimmed.includes("@{")) {
+    return { ok: false, reason: `Term "${trimmed}" contains invalid Git ref characters` };
+  }
+  if (trimmed.startsWith("-") || trimmed.startsWith(".") || trimmed.endsWith(".")) {
+    return { ok: false, reason: `Term "${trimmed}" cannot start with '-' or start/end with '.'` };
+  }
+  const reserved = new Set(["start", "skip", "reset", "replay", "log", "run", "view", "visualize", "help", "terms"]);
+  if (reserved.has(trimmed.toLowerCase())) {
+    return { ok: false, reason: `Term "${trimmed}" is a reserved Git bisect subcommand` };
+  }
+  return { ok: true };
+}
+
+export function parseTermsOption(
+  termsArg: string
+): { ok: true; value: CustomBisectTerms } | { ok: false; error: string } {
+  const parts = termsArg.split(",");
+  if (parts.length !== 2) {
+    return { ok: false, error: 'Custom terms must be in format "<old>,<new>" (e.g. "fixed,broken" or "old,new")' };
+  }
+  const oldTerm = parts[0]!.trim();
+  const newTerm = parts[1]!.trim();
+
+  const oldVal = validateBisectTerm(oldTerm);
+  if (!oldVal.ok) {
+    return { ok: false, error: `Invalid old term "${oldTerm}": ${oldVal.reason}` };
+  }
+  const newVal = validateBisectTerm(newTerm);
+  if (!newVal.ok) {
+    return { ok: false, error: `Invalid new term "${newTerm}": ${newVal.reason}` };
+  }
+  if (oldTerm === newTerm) {
+    return { ok: false, error: `Old and new terms cannot be identical ("${oldTerm}")` };
+  }
+  return { ok: true, value: { old: oldTerm, new: newTerm } };
+}
+
 export const DEFAULT_EXECUTION_POLICY: ExecutionPolicy = Object.freeze({
   maxOutputBytesPerCommand: 1_000_000,
   maxRetries: 0,
@@ -87,6 +156,7 @@ export const DEFAULT_EXECUTION_POLICY: ExecutionPolicy = Object.freeze({
   cleanIgnored: false,
   allowlistedEnvVars: [],
   enforceNodeToolchainCheck: true,
+  interactivePrompt: false,
 });
 
 function validateCommandSpec(
@@ -143,6 +213,31 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
   }
   if (typeof obj.badRef !== "string" || obj.badRef.trim().length === 0) {
     issues.push({ path: "badRef", message: "badRef must be a non-empty string" });
+  }
+
+  let terms: CustomBisectTerms | undefined;
+  if (obj.terms !== undefined) {
+    if (!obj.terms || typeof obj.terms !== "object") {
+      issues.push({ path: "terms", message: "terms must be an object with 'old' and 'new' properties" });
+    } else {
+      const rawTerms = obj.terms as Record<string, unknown>;
+      const oldTerm = typeof rawTerms.old === "string" ? rawTerms.old : "";
+      const newTerm = typeof rawTerms.new === "string" ? rawTerms.new : "";
+      const oldVal = validateBisectTerm(oldTerm);
+      if (!oldVal.ok) {
+        issues.push({ path: "terms.old", message: oldVal.reason ?? "Invalid old term" });
+      }
+      const newVal = validateBisectTerm(newTerm);
+      if (!newVal.ok) {
+        issues.push({ path: "terms.new", message: newVal.reason ?? "Invalid new term" });
+      }
+      if (oldVal.ok && newVal.ok && oldTerm === newTerm) {
+        issues.push({ path: "terms", message: `Old and new terms cannot be identical ("${oldTerm}")` });
+      }
+      if (oldVal.ok && newVal.ok && oldTerm !== newTerm) {
+        terms = { old: oldTerm, new: newTerm };
+      }
+    }
   }
 
   const prepare = obj.prepare !== undefined ? validateCommandSpec(obj.prepare, "prepare", issues) : undefined;
@@ -230,6 +325,45 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
       typeof rawExec.enforceNodeToolchainCheck === "boolean"
         ? rawExec.enforceNodeToolchainCheck
         : DEFAULT_EXECUTION_POLICY.enforceNodeToolchainCheck,
+    interactivePrompt:
+      typeof rawExec.interactivePrompt === "boolean"
+        ? rawExec.interactivePrompt
+        : false,
+    ...(rawExec.toolchainWrapper &&
+    typeof rawExec.toolchainWrapper === "object" &&
+    typeof (rawExec.toolchainWrapper as Record<string, unknown>).command === "string"
+      ? {
+          toolchainWrapper: {
+            command: (rawExec.toolchainWrapper as Record<string, unknown>).command as string,
+            ...(Array.isArray((rawExec.toolchainWrapper as Record<string, unknown>).args)
+              ? {
+                  args: ((rawExec.toolchainWrapper as Record<string, unknown>).args as unknown[]).filter(
+                    (x): x is string => typeof x === "string"
+                  ),
+                }
+              : {}),
+          },
+        }
+      : {}),
+    ...(rawExec.noisyOracle && typeof rawExec.noisyOracle === "object"
+      ? {
+          noisyOracle: {
+            enabled: Boolean((rawExec.noisyOracle as Record<string, unknown>).enabled),
+            maxSamplesPerRevision:
+              typeof (rawExec.noisyOracle as Record<string, unknown>).maxSamplesPerRevision === "number"
+                ? ((rawExec.noisyOracle as Record<string, unknown>).maxSamplesPerRevision as number)
+                : 5,
+            confidenceThreshold:
+              typeof (rawExec.noisyOracle as Record<string, unknown>).confidenceThreshold === "number"
+                ? ((rawExec.noisyOracle as Record<string, unknown>).confidenceThreshold as number)
+                : 0.9,
+            flakeRate:
+              typeof (rawExec.noisyOracle as Record<string, unknown>).flakeRate === "number"
+                ? ((rawExec.noisyOracle as Record<string, unknown>).flakeRate as number)
+                : 0.1,
+          },
+        }
+      : {}),
   };
 
   if (execution.maxOutputBytesPerCommand <= 0) {
@@ -243,6 +377,29 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
   }
   if (execution.maxSkips < 0) {
     issues.push({ path: "execution.maxSkips", message: "Must be >= 0" });
+  }
+  if (execution.noisyOracle) {
+    if (
+      execution.noisyOracle.maxSamplesPerRevision !== undefined &&
+      execution.noisyOracle.maxSamplesPerRevision < 1
+    ) {
+      issues.push({ path: "execution.noisyOracle.maxSamplesPerRevision", message: "Must be >= 1" });
+    }
+    if (
+      execution.noisyOracle.confidenceThreshold !== undefined &&
+      (execution.noisyOracle.confidenceThreshold <= 0.5 || execution.noisyOracle.confidenceThreshold >= 1.0)
+    ) {
+      issues.push({
+        path: "execution.noisyOracle.confidenceThreshold",
+        message: "Must be between 0.5 and 1.0",
+      });
+    }
+    if (
+      execution.noisyOracle.flakeRate !== undefined &&
+      (execution.noisyOracle.flakeRate <= 0.0 || execution.noisyOracle.flakeRate >= 0.5)
+    ) {
+      issues.push({ path: "execution.noisyOracle.flakeRate", message: "Must be between 0.0 and 0.5" });
+    }
   }
 
   if (issues.length > 0 || !oracle) {
@@ -258,6 +415,7 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
       workingDirectory,
       goodRef: obj.goodRef as string,
       badRef: obj.badRef as string,
+      ...(terms ? { terms } : {}),
       ...(prepare ? { prepare } : {}),
       ...(build ? { build } : {}),
       oracle,

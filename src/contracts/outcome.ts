@@ -28,6 +28,15 @@ export interface OracleOutcome {
   readonly reasonCode: OracleReasonCode;
   readonly detail: string;
   readonly gitExitCode: GitBisectExitCode;
+  readonly classifiedBy?: "automated" | "human";
+  readonly noisySampling?: {
+    readonly sampleCount: number;
+    readonly passedRuns: number;
+    readonly failedRuns: number;
+    readonly skippedRuns: number;
+    readonly posterior: number;
+    readonly confidenceThreshold: number;
+  };
 }
 
 /**

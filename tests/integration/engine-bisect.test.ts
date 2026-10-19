@@ -109,9 +109,13 @@ describe("A4–A10 — End-to-End BisectEngine Integration (In-Tree, Overlay, Pr
         false
       );
 
-      // Verify ledger hash chain integrity
+      // Verify ledger hash chain integrity & generated report artifacts
       const events = readLedgerEvents(manifest.ledgerPath);
       assert.equal(verifyLedgerChain(events).valid, true);
+      assert.equal(existsSync(path.join(manifest.sessionDir, "report.md")), true);
+      assert.equal(existsSync(path.join(manifest.sessionDir, "report.json")), true);
+      assert.equal(existsSync(path.join(manifest.sessionDir, "repro.sh")), true);
+      assert.equal(existsSync(path.join(manifest.sessionDir, "bisect.log")), true);
 
       // Verify user's original checkout still has its uncommitted edit and overlay file intact
       assert.equal(
@@ -168,6 +172,84 @@ describe("A4–A10 — End-to-End BisectEngine Integration (In-Tree, Overlay, Pr
       assert.equal(manifest.state, "cleaned_up");
       assert.equal(manifest.conclusion?.outcome, "inconclusive");
       assert.equal(manifest.conclusion?.inconclusiveReason, "endpoints_contradict");
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("supports external oracle mode and recovers/resumes a crashed session with a stale lock", async () => {
+    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "bp-ext-resume-"));
+    try {
+      const { repoDir, shas, plantedBadSha } = await createLinearRegressionRepo(tmpRoot);
+      const sessionsRoot = path.join(tmpRoot, "sessions");
+      const extScript = path.join(repoDir, "ext-oracle.mjs");
+      writeFileSync(
+        extScript,
+        `import { pathToFileURL } from "node:url";
+         import path from "node:path";
+         const mod = await import(pathToFileURL(path.resolve("calc.mjs")).href);
+         process.exit(mod.answer === 42 ? 0 : 1);\n`,
+        "utf-8"
+      );
+
+      const config: BisectConfigV1 = {
+        schemaVersion: 1,
+        profile: "functional",
+        repositoryRoot: repoDir,
+        workingDirectory: ".",
+        goodRef: shas[0]!,
+        badRef: shas[5]!,
+        oracle: {
+          mode: "external",
+          command: {
+            command: "node",
+            args: ["ext-oracle.mjs"],
+            timeoutMs: 10_000,
+          },
+          externalScriptPath: "ext-oracle.mjs",
+        },
+        execution: {
+          ...DEFAULT_EXECUTION_POLICY,
+          endpointFlakeRuns: 1,
+          boundaryConfirmRuns: 1,
+          confirmBeforeExecutingCode: true,
+        },
+        sessionRootDir: sessionsRoot,
+      };
+
+      const engine = new LocalBisectEngine();
+      // Start and decline consent to get an initialized session directory, then simulate a mid-run crash
+      const initial = await engine.start(config, {
+        sessionId: "sess-crash-01",
+        confirm: () => false,
+      });
+      assert.equal(initial.state, "cancelled");
+
+      // Simulate a crashed process in bisect_running with a dead PID lockfile
+      const crashedManifest = {
+        ...initial,
+        state: "bisect_running" as const,
+      };
+      writeFileSync(
+        path.join(initial.sessionDir, "manifest.json"),
+        JSON.stringify(crashedManifest, null, 2) + "\n",
+        "utf-8"
+      );
+      writeFileSync(
+        path.join(initial.sessionDir, "session.lock"),
+        JSON.stringify({ pid: 999999, hostname: os.hostname(), acquiredAt: new Date().toISOString() }),
+        "utf-8"
+      );
+
+      const statusReport = await engine.status("sess-crash-01", sessionsRoot);
+      assert.equal(statusReport.manifest.state, "needs_recovery");
+      assert.equal(statusReport.lockStatus, "locked_stale");
+
+      // Resume from needs_recovery and verify it finds the exact planted SHA
+      const resumed = await engine.resume("sess-crash-01", { autoCleanup: true }, sessionsRoot);
+      assert.equal(resumed.state, "cleaned_up");
+      assert.equal(resumed.conclusion?.outcome, "candidate_confirmed");
+      assert.equal(resumed.conclusion?.candidateSha, plantedBadSha);
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }

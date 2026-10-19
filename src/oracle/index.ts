@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
+import readline from "node:readline";
 import type {
   BisectConfigV1,
   CommandSpec,
@@ -14,9 +15,11 @@ import {
   classifyPrepareStep,
   makeOutcome,
 } from "../domain/classification.js";
+import { evaluateBayesianDecision } from "../domain/bayesian.js";
 import { runGit } from "../git/index.js";
 import { appendLedgerEvent } from "../ledger/index.js";
-import { runSafeProcess, type ProcessRunResult } from "../process/index.js";
+import { applyToolchainWrapper, runSafeProcess, type ProcessRunResult } from "../process/index.js";
+import { redactSensitiveText } from "../reports/index.js";
 
 export interface ToolchainInspection {
   readonly detectedNodeSpec?: string;
@@ -112,12 +115,161 @@ export function snapshotOverlayFiles(
   return hashes;
 }
 
+export function snapshotExternalScript(
+  repoRoot: string,
+  sessionDir: string,
+  externalScriptPath: string
+): { readonly snapshotPath: string; readonly sha256: string } {
+  const sourcePath = path.resolve(repoRoot, externalScriptPath);
+  if (!existsSync(sourcePath)) {
+    throw new Error(`External oracle script not found at ${sourcePath}`);
+  }
+  const externalDir = path.join(sessionDir, "external");
+  mkdirSync(externalDir, { recursive: true });
+  const destPath = path.join(externalDir, path.basename(sourcePath));
+  copyFileSync(sourcePath, destPath);
+  return { snapshotPath: destPath, sha256: sha256File(destPath) };
+}
+
 export async function isPathTrackedInRevision(
   worktreePath: string,
   relPath: string
 ): Promise<boolean> {
   const res = await runGit(["ls-files", "--error-unmatch", "--", relPath], worktreePath);
   return res.exitCode === 0;
+}
+
+export { applyToolchainWrapper as wrapCommandWithToolchain };
+
+export interface PromptStreams {
+  readonly input?: NodeJS.ReadableStream;
+  readonly output?: NodeJS.WritableStream;
+  readonly isTTY?: boolean;
+}
+
+export async function promptHumanClassification(params: {
+  readonly commitSha: string;
+  readonly commandSpec: CommandSpec;
+  readonly automatedOutcome: OracleOutcome;
+  readonly capturedOutput?: { readonly stdout: string; readonly stderr: string };
+  readonly executionInfo?: string;
+  readonly streams?: PromptStreams;
+  readonly abortSignal?: AbortSignal;
+}): Promise<OracleOutcome> {
+  const input = params.streams?.input ?? process.stdin;
+  const output = params.streams?.output ?? process.stdout;
+  const isInteractive =
+    params.streams?.isTTY !== undefined
+      ? params.streams.isTTY
+      : params.streams?.input !== undefined
+        ? Boolean((input as any).isTTY ?? true)
+        : Boolean(process.stdin.isTTY);
+
+  if (params.abortSignal?.aborted) {
+    return makeOutcome("abort", "cancelled", "Cancelled while awaiting interactive prompt");
+  }
+
+  if (!isInteractive) {
+    output.write(
+      `[prompt] Stdin is non-interactive; accepting automated outcome (${params.automatedOutcome.kind}: ${params.automatedOutcome.reasonCode})\n`
+    );
+    return params.automatedOutcome;
+  }
+
+  const redactedStdout = redactSensitiveText(params.capturedOutput?.stdout ?? "");
+  const redactedStderr = redactSensitiveText(params.capturedOutput?.stderr ?? "");
+  const combinedOutput = [
+    redactedStdout ? `--- stdout ---\n${redactedStdout.trim()}` : "",
+    redactedStderr ? `--- stderr ---\n${redactedStderr.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const promptMessage = [
+    `\n=== BisectPilot Interactive Oracle Prompt ===`,
+    `Commit:    ${params.commitSha.slice(0, 8)} (${params.commitSha})`,
+    `Command:   ${params.commandSpec.command} ${params.commandSpec.args.join(" ")}`,
+    `Outcome:   ${params.automatedOutcome.kind} (${params.automatedOutcome.reasonCode}): ${redactSensitiveText(params.automatedOutcome.detail)}`,
+    params.executionInfo ? `Info:      ${redactSensitiveText(params.executionInfo)}` : "",
+    combinedOutput ? `\nCaptured Output:\n${combinedOutput}\n` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  output.write(`${promptMessage}\n`);
+
+  return new Promise<OracleOutcome>((resolve) => {
+    let resolved = false;
+    const rl = readline.createInterface({
+      input,
+      output,
+      terminal: false,
+    });
+
+    const finish = (outcome: OracleOutcome) => {
+      if (resolved) return;
+      resolved = true;
+      rl.close();
+      resolve(outcome);
+    };
+
+    const onAbort = () => {
+      finish(makeOutcome("abort", "cancelled", "Cancelled while awaiting interactive prompt"));
+    };
+
+    if (params.abortSignal) {
+      params.abortSignal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    const ask = () => {
+      rl.question("Classify this revision as (g)ood, (b)ad, or (s)kip? ", (answer) => {
+        const trimmed = answer.trim().toLowerCase();
+        if (trimmed === "g" || trimmed === "good") {
+          finish(
+            makeOutcome(
+              "good",
+              "oracle_passed",
+              `Classified as good by human operator (was ${params.automatedOutcome.kind})`,
+              "human"
+            )
+          );
+        } else if (trimmed === "b" || trimmed === "bad") {
+          finish(
+            makeOutcome(
+              "bad",
+              params.automatedOutcome.kind === "bad"
+                ? params.automatedOutcome.reasonCode
+                : "oracle_failed_expected_regression",
+              `Classified as bad by human operator (was ${params.automatedOutcome.kind})`,
+              "human"
+            )
+          );
+        } else if (trimmed === "s" || trimmed === "skip") {
+          finish(
+            makeOutcome(
+              "skip",
+              params.automatedOutcome.kind === "skip"
+                ? params.automatedOutcome.reasonCode
+                : "build_prerequisite_failed",
+              `Classified as skip by human operator (was ${params.automatedOutcome.kind})`,
+              "human"
+            )
+          );
+        } else {
+          output.write(`Invalid choice "${answer.trim()}". Please enter 'g' for good, 'b' for bad, or 's' for skip.\n`);
+          ask();
+        }
+      });
+    };
+
+    rl.once("close", () => {
+      if (!resolved) {
+        finish(params.automatedOutcome);
+      }
+    });
+
+    ask();
+  });
 }
 
 export interface RevisionEvaluationParams {
@@ -129,6 +281,7 @@ export interface RevisionEvaluationParams {
   readonly config: BisectConfigV1;
   readonly overlayHashes: Readonly<Record<string, string>>;
   readonly phasePrefix?: "oracle" | "preflight_good" | "preflight_bad" | "boundary_check";
+  readonly promptStreams?: PromptStreams;
   readonly abortSignal?: AbortSignal;
   readonly onEvent?: (event: LedgerEvent) => void;
 }
@@ -141,9 +294,16 @@ async function runAndRecordStep(params: {
   readonly commandSpec: CommandSpec;
   readonly cwd: string;
   readonly config: BisectConfigV1;
+  readonly detectedToolchainVersion?: string;
   readonly abortSignal?: AbortSignal;
   readonly onEvent?: (event: LedgerEvent) => void;
 }): Promise<ProcessRunResult> {
+  const wrapped = applyToolchainWrapper(
+    params.commandSpec,
+    params.config.execution.toolchainWrapper,
+    params.detectedToolchainVersion
+  );
+
   appendLedgerEvent(
     params.ledgerPath,
     {
@@ -151,8 +311,8 @@ async function runAndRecordStep(params: {
       sessionId: params.sessionId,
       commitSha: params.commitSha,
       phase: params.phase,
-      command: params.commandSpec.command,
-      args: params.commandSpec.args,
+      command: wrapped.command,
+      args: wrapped.args,
       cwd: params.cwd,
     },
     params.onEvent
@@ -162,6 +322,7 @@ async function runAndRecordStep(params: {
     commandSpec: params.commandSpec,
     cwd: params.cwd,
     executionPolicy: params.config.execution,
+    detectedToolchainVersion: params.detectedToolchainVersion,
     abortSignal: params.abortSignal,
   });
 
@@ -199,13 +360,76 @@ export async function evaluateCheckedOutRevision(
 ): Promise<OracleOutcome> {
   const stepCwd = path.resolve(params.worktreePath, params.config.workingDirectory || ".");
   const toolchain = inspectRevisionToolchain(params.worktreePath);
+  const detectedVersion =
+    toolchain.detectedNodeSpec ??
+    (toolchain.requiredMajor !== undefined ? String(toolchain.requiredMajor) : undefined);
+  const wrapper = params.config.execution.toolchainWrapper;
 
-  if (params.config.execution.enforceNodeToolchainCheck !== false && toolchain.mismatch) {
-    const outcome = makeOutcome(
+  if (wrapper) {
+    const rawArgs = wrapper.args ?? [];
+    const requiresVersion = rawArgs.some(
+      (arg) => arg.includes("<version>") || arg.includes("${version}")
+    );
+    if (requiresVersion && !detectedVersion) {
+      let outcome = makeOutcome(
+        "skip",
+        "toolchain_mismatch",
+        `Toolchain wrapper (${wrapper.command}) requires a detected runtime version (<version>), but none was found in the revision`
+      );
+      if (
+        params.config.execution.interactivePrompt === true &&
+        (params.phasePrefix === "oracle" || params.phasePrefix === undefined)
+      ) {
+        outcome = await promptHumanClassification({
+          commitSha: params.commitSha,
+          commandSpec: params.config.oracle.command,
+          automatedOutcome: outcome,
+          executionInfo: `Toolchain wrapper requires version but none found in revision`,
+          streams: params.promptStreams,
+          abortSignal: params.abortSignal,
+        });
+      }
+      appendLedgerEvent(
+        params.ledgerPath,
+        {
+          type: "revision_classified",
+          sessionId: params.sessionId,
+          commitSha: params.commitSha,
+          classification: outcome.kind,
+          reasonCode: outcome.reasonCode,
+          detail: outcome.detail,
+          gitExitCode: outcome.gitExitCode,
+          overlayHashes: params.overlayHashes,
+          classifiedBy: outcome.classifiedBy ?? "automated",
+          toolchainInfo: {
+            ...(toolchain.detectedNodeSpec ? { detectedNodeSpec: toolchain.detectedNodeSpec } : {}),
+            runningNodeVersion: toolchain.runningNodeVersion,
+            ...(toolchain.packageManager ? { packageManager: toolchain.packageManager } : {}),
+          },
+        },
+        params.onEvent
+      );
+      return outcome;
+    }
+  } else if (params.config.execution.enforceNodeToolchainCheck !== false && toolchain.mismatch) {
+    let outcome = makeOutcome(
       "skip",
       "toolchain_mismatch",
       `Revision requires Node ${toolchain.detectedNodeSpec} (major ${toolchain.requiredMajor}), running ${toolchain.runningNodeVersion}`
     );
+    if (
+      params.config.execution.interactivePrompt === true &&
+      (params.phasePrefix === "oracle" || params.phasePrefix === undefined)
+    ) {
+      outcome = await promptHumanClassification({
+        commitSha: params.commitSha,
+        commandSpec: params.config.oracle.command,
+        automatedOutcome: outcome,
+        executionInfo: `Toolchain mismatch: requires Node ${toolchain.detectedNodeSpec}, running ${toolchain.runningNodeVersion}`,
+        streams: params.promptStreams,
+        abortSignal: params.abortSignal,
+      });
+    }
     appendLedgerEvent(
       params.ledgerPath,
       {
@@ -217,6 +441,7 @@ export async function evaluateCheckedOutRevision(
         detail: outcome.detail,
         gitExitCode: outcome.gitExitCode,
         overlayHashes: params.overlayHashes,
+        classifiedBy: outcome.classifiedBy ?? "automated",
         toolchainInfo: {
           ...(toolchain.detectedNodeSpec ? { detectedNodeSpec: toolchain.detectedNodeSpec } : {}),
           runningNodeVersion: toolchain.runningNodeVersion,
@@ -275,6 +500,8 @@ export async function evaluateCheckedOutRevision(
       }
     }
 
+    let lastRunResult: ProcessRunResult | undefined;
+
     if (params.config.prepare) {
       const prepRes = await runAndRecordStep({
         sessionId: params.sessionId,
@@ -284,17 +511,18 @@ export async function evaluateCheckedOutRevision(
         commandSpec: params.config.prepare,
         cwd: stepCwd,
         config: params.config,
+        detectedToolchainVersion: detectedVersion,
         abortSignal: params.abortSignal,
         onEvent: params.onEvent,
       });
+      lastRunResult = prepRes;
       const prepClassification = classifyPrepareStep(prepRes);
       if (prepClassification) {
         finalOutcome = prepClassification;
-        return finalOutcome;
       }
     }
 
-    if (params.config.build) {
+    if (!finalOutcome && params.config.build) {
       const buildRes = await runAndRecordStep({
         sessionId: params.sessionId,
         ledgerPath: params.ledgerPath,
@@ -303,9 +531,11 @@ export async function evaluateCheckedOutRevision(
         commandSpec: params.config.build,
         cwd: stepCwd,
         config: params.config,
+        detectedToolchainVersion: detectedVersion,
         abortSignal: params.abortSignal,
         onEvent: params.onEvent,
       });
+      lastRunResult = buildRes;
       const buildClassification = classifyBuildStep(
         buildRes,
         params.config.profile,
@@ -313,25 +543,181 @@ export async function evaluateCheckedOutRevision(
       );
       if (buildClassification) {
         finalOutcome = buildClassification;
-        return finalOutcome;
       }
     }
 
     const oraclePhase: StepPhase = params.phasePrefix ?? "oracle";
-    const oracleRes = await runAndRecordStep({
-      sessionId: params.sessionId,
-      ledgerPath: params.ledgerPath,
-      commitSha: params.commitSha,
-      phase: oraclePhase,
-      commandSpec: params.config.oracle.command,
-      cwd: stepCwd,
-      config: params.config,
-      abortSignal: params.abortSignal,
-      onEvent: params.onEvent,
-    });
+    let oracleCommandSpec = params.config.oracle.command;
 
-    finalOutcome = classifyOracleStep(oracleRes, params.config.profile);
-    return finalOutcome;
+    if (!finalOutcome) {
+      if (params.config.oracle.mode === "external" && params.config.oracle.externalScriptPath) {
+        const extSnap = path.join(
+          params.sessionDir,
+          "external",
+          path.basename(params.config.oracle.externalScriptPath)
+        );
+        if (!existsSync(extSnap)) {
+          finalOutcome = makeOutcome(
+            "abort",
+            "overlay_missing_or_corrupt",
+            `Missing snapshotted external script: ${extSnap}`
+          );
+          return finalOutcome;
+        }
+        const rawExt = params.config.oracle.externalScriptPath;
+        oracleCommandSpec = {
+          ...oracleCommandSpec,
+          command: oracleCommandSpec.command === rawExt ? extSnap : oracleCommandSpec.command,
+          args: oracleCommandSpec.args.map((arg) => (arg === rawExt ? extSnap : arg)),
+        };
+      }
+
+      const noisyPolicy = params.config.execution.noisyOracle;
+      if (noisyPolicy?.enabled) {
+        const maxSamples = noisyPolicy.maxSamplesPerRevision ?? 5;
+        const confidenceThreshold = noisyPolicy.confidenceThreshold ?? 0.90;
+        const flakeRate = noisyPolicy.flakeRate ?? 0.10;
+
+        let passedRuns = 0;
+        let failedRuns = 0;
+        let skippedRuns = 0;
+
+        for (let sample = 1; sample <= maxSamples; sample++) {
+          if (params.abortSignal?.aborted) {
+            finalOutcome = makeOutcome("abort", "cancelled", "Cancelled during noisy oracle sampling");
+            break;
+          }
+
+          const oracleRes = await runAndRecordStep({
+            sessionId: params.sessionId,
+            ledgerPath: params.ledgerPath,
+            commitSha: params.commitSha,
+            phase: oraclePhase,
+            commandSpec: oracleCommandSpec,
+            cwd: stepCwd,
+            config: params.config,
+            detectedToolchainVersion: detectedVersion,
+            abortSignal: params.abortSignal,
+            onEvent: params.onEvent,
+          });
+          lastRunResult = oracleRes;
+
+          const sampleOutcome = classifyOracleStep(oracleRes, params.config.profile);
+          if (sampleOutcome.kind === "abort") {
+            finalOutcome = sampleOutcome;
+            break;
+          } else if (sampleOutcome.kind === "good") {
+            passedRuns++;
+          } else if (sampleOutcome.kind === "bad") {
+            failedRuns++;
+          } else {
+            skippedRuns++;
+          }
+
+          const evalResult = evaluateBayesianDecision({
+            passes: passedRuns,
+            fails: failedRuns,
+            confidenceThreshold,
+            flakeRate,
+          });
+
+          if (evalResult.decision === "bad") {
+            finalOutcome = makeOutcome(
+              "bad",
+              "oracle_failed_expected_regression",
+              `Noisy oracle classified revision as bad (P(bad)=${evalResult.posteriorBad.toFixed(4)} >= ${confidenceThreshold} after ${sample} samples; ${failedRuns} failed, ${passedRuns} passed)`,
+              "automated",
+              {
+                sampleCount: sample,
+                passedRuns,
+                failedRuns,
+                skippedRuns,
+                posterior: evalResult.posteriorBad,
+                confidenceThreshold,
+              }
+            );
+            break;
+          } else if (evalResult.decision === "good") {
+            finalOutcome = makeOutcome(
+              "good",
+              "oracle_passed",
+              `Noisy oracle classified revision as good (P(good)=${evalResult.posteriorGood.toFixed(4)} >= ${confidenceThreshold} after ${sample} samples; ${passedRuns} passed, ${failedRuns} failed)`,
+              "automated",
+              {
+                sampleCount: sample,
+                passedRuns,
+                failedRuns,
+                skippedRuns,
+                posterior: evalResult.posteriorBad,
+                confidenceThreshold,
+              }
+            );
+            break;
+          }
+        }
+
+        if (!finalOutcome) {
+          const evalResult = evaluateBayesianDecision({
+            passes: passedRuns,
+            fails: failedRuns,
+            confidenceThreshold,
+            flakeRate,
+          });
+          finalOutcome = makeOutcome(
+            "skip",
+            "skip_budget_exceeded",
+            `Noisy oracle sampling budget exhausted (${maxSamples} samples; ${passedRuns} passed, ${failedRuns} failed, ${skippedRuns} skipped) without reaching confidence threshold ${confidenceThreshold} (P(bad)=${evalResult.posteriorBad.toFixed(4)})`,
+            "automated",
+            {
+              sampleCount: maxSamples,
+              passedRuns,
+              failedRuns,
+              skippedRuns,
+              posterior: evalResult.posteriorBad,
+              confidenceThreshold,
+            }
+          );
+        }
+      } else {
+        const oracleRes = await runAndRecordStep({
+          sessionId: params.sessionId,
+          ledgerPath: params.ledgerPath,
+          commitSha: params.commitSha,
+          phase: oraclePhase,
+          commandSpec: oracleCommandSpec,
+          cwd: stepCwd,
+          config: params.config,
+          detectedToolchainVersion: detectedVersion,
+          abortSignal: params.abortSignal,
+          onEvent: params.onEvent,
+        });
+        lastRunResult = oracleRes;
+
+        finalOutcome = classifyOracleStep(oracleRes, params.config.profile);
+      }
+    }
+
+    if (
+      params.config.execution.interactivePrompt === true &&
+      (params.phasePrefix === "oracle" || params.phasePrefix === undefined) &&
+      finalOutcome
+    ) {
+      finalOutcome = await promptHumanClassification({
+        commitSha: params.commitSha,
+        commandSpec: oracleCommandSpec,
+        automatedOutcome: finalOutcome,
+        capturedOutput: lastRunResult ? { stdout: lastRunResult.stdout, stderr: lastRunResult.stderr } : undefined,
+        executionInfo: lastRunResult?.timedOut
+          ? `Command timed out after ${lastRunResult.durationMs}ms`
+          : lastRunResult?.spawnErrorMessage
+            ? `Spawn error: ${lastRunResult.spawnErrorMessage}`
+            : undefined,
+        streams: params.promptStreams,
+        abortSignal: params.abortSignal,
+      });
+    }
+
+    return finalOutcome!;
   } finally {
     for (const target of copiedOverlayTargets) {
       rmSync(target, { force: true, recursive: true });
@@ -361,6 +747,8 @@ export async function evaluateCheckedOutRevision(
           detail: finalOutcome.detail,
           gitExitCode: finalOutcome.gitExitCode,
           overlayHashes: params.overlayHashes,
+          classifiedBy: finalOutcome.classifiedBy ?? "automated",
+          ...(finalOutcome.noisySampling ? { noisySampling: finalOutcome.noisySampling } : {}),
           toolchainInfo: {
             ...(toolchain.detectedNodeSpec ? { detectedNodeSpec: toolchain.detectedNodeSpec } : {}),
             runningNodeVersion: toolchain.runningNodeVersion,

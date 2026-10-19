@@ -11,13 +11,17 @@ import type { ProcessRunResult } from "../adapters/process/process-runner.js";
 export function makeOutcome(
   kind: ClassificationKind,
   reasonCode: OracleReasonCode,
-  detail: string
+  detail: string,
+  classifiedBy: "automated" | "human" = "automated",
+  noisySampling?: OracleOutcome["noisySampling"]
 ): OracleOutcome {
   return {
     kind,
     reasonCode,
     detail,
     gitExitCode: mapClassificationToGitExitCode(kind),
+    classifiedBy,
+    ...(noisySampling ? { noisySampling } : {}),
   };
 }
 

@@ -11,12 +11,13 @@ behavior change back to the first turn where two runs stopped agreeing.
   prompt, model, tool, and timing context around it.
 - **Routes:**
   - `/` — marketing page with the interactive replay console.
+  - `/explorer` — standalone replay workspace supporting CLI JSON report uploads (`bisectpilot report <id> --json`) and exported runs.
   - `/docs` — crawlable explanation of the compare → walk → handoff workflow.
   - `/sitemap.xml` and `/robots.txt` — generated SEO endpoints.
 - **Rendering:** static server-rendered App Router pages, with the replay console as
   a small client component for filtering, tab changes, replay, and copy feedback.
-- **Data:** the console uses deterministic sample data; no external API or secret is
-  required.
+- **Data:** deterministic sample data and client-side CLI report importation; no external API or secret is required.
+
 
 ## Design direction
 

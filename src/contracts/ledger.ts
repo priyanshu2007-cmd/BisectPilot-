@@ -23,6 +23,10 @@ export interface SessionCreatedEvent extends LedgerEventBase {
   readonly badSha: string;
   readonly worktreePath: string;
   readonly overlayHashes: Readonly<Record<string, string>>;
+  readonly terms?: {
+    readonly old: string;
+    readonly new: string;
+  };
 }
 
 export interface StateTransitionEvent extends LedgerEventBase {
@@ -66,6 +70,15 @@ export interface RevisionClassifiedEvent extends LedgerEventBase {
   readonly detail: string;
   readonly gitExitCode: 0 | 1 | 125 | 128;
   readonly overlayHashes: Readonly<Record<string, string>>;
+  readonly classifiedBy?: "automated" | "human";
+  readonly noisySampling?: {
+    readonly sampleCount: number;
+    readonly passedRuns: number;
+    readonly failedRuns: number;
+    readonly skippedRuns: number;
+    readonly posterior: number;
+    readonly confidenceThreshold: number;
+  };
   readonly toolchainInfo?: {
     readonly detectedNodeSpec?: string;
     readonly runningNodeVersion: string;
