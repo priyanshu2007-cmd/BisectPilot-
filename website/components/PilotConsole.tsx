@@ -254,11 +254,33 @@ type NoteItem = {
   text: string;
 };
 
+function isValidScenario(value: unknown): value is Scenario {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.name === "string" &&
+    typeof candidate.firstDriftTurn === "string" &&
+    Array.isArray(candidate.turns) &&
+    candidate.turns.length > 0 &&
+    candidate.turns.every(
+      (turn) =>
+        turn &&
+        typeof turn === "object" &&
+        typeof (turn as Record<string, unknown>).id === "string" &&
+        typeof (turn as Record<string, unknown>).baselineOutput === "string" &&
+        typeof (turn as Record<string, unknown>).currentOutput === "string"
+    )
+  );
+}
+
 export default function PilotConsole({ fullPage = false }: { fullPage?: boolean }) {
+  const [scenarios, setScenarios] = useState<Scenario[]>(SCENARIOS);
   const [scenarioId, setScenarioId] = useState<string>(SCENARIOS[0].id);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
   const scenario = useMemo(
-    () => SCENARIOS.find((item) => item.id === scenarioId) ?? SCENARIOS[0],
-    [scenarioId]
+    () => scenarios.find((item) => item.id === scenarioId) ?? scenarios[0],
+    [scenarios, scenarioId]
   );
 
   const [activeTurnId, setActiveTurnId] = useState<string>("04");
@@ -286,6 +308,28 @@ export default function PilotConsole({ fullPage = false }: { fullPage?: boolean 
   ]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/runs/index.json")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((loaded: unknown) => {
+        if (!active || !Array.isArray(loaded)) return;
+        const valid = loaded.filter(isValidScenario);
+        if (valid.length === 0) return;
+        setScenarios((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          return [...valid.filter((item) => !existingIds.has(item.id)), ...prev];
+        });
+      })
+      .catch(() => {
+        // Optional CLI export index; ignore when absent
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const turns = scenario.turns;
 
@@ -375,10 +419,34 @@ export default function PilotConsole({ fullPage = false }: { fullPage?: boolean 
   }
 
   function handleSelectScenario(nextId: string) {
-    const nextScenario = SCENARIOS.find((item) => item.id === nextId) ?? SCENARIOS[0];
+    const nextScenario = scenarios.find((item) => item.id === nextId) ?? scenarios[0];
     setScenarioId(nextScenario.id);
     setActiveTurnId(nextScenario.firstDriftTurn);
     setIsPlaying(false);
+  }
+
+  async function handleImportScenarioFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setImportStatus("Import rejected: file exceeds 2 MB limit");
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      if (!isValidScenario(parsed)) {
+        setImportStatus("Import rejected: invalid Scenario JSON schema");
+        return;
+      }
+      setScenarios((prev) => [parsed, ...prev.filter((item) => item.id !== parsed.id)]);
+      setScenarioId(parsed.id);
+      setActiveTurnId(parsed.firstDriftTurn);
+      setIsPlaying(false);
+      setImportStatus(`Loaded ${parsed.name} (first drift: Turn ${parsed.firstDriftTurn})`);
+    } catch {
+      setImportStatus("Import rejected: malformed JSON file");
+    }
   }
 
   function toggleReplay() {
@@ -446,13 +514,30 @@ export default function PilotConsole({ fullPage = false }: { fullPage?: boolean 
               onChange={(event) => handleSelectScenario(event.target.value)}
               aria-label="Regression scenario"
             >
-              {SCENARIOS.map((item) => (
+              {scenarios.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.currentRunId} — {item.name}
                 </option>
               ))}
             </select>
           </label>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleImportScenarioFile}
+            className="sr-only"
+            aria-label="Import bisectpilot JSON scenario"
+          />
+          <button
+            className="run-id"
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+            title="Import a bisectpilot Scenario JSON file (max 2 MB)"
+          >
+            Import JSON
+          </button>
 
           <button
             className="run-id"
@@ -475,7 +560,9 @@ export default function PilotConsole({ fullPage = false }: { fullPage?: boolean 
               ? "Copied run ID"
               : copiedId === "cli"
                 ? "Copied CLI command"
-                : `${scenario.baselineRunId} ↔ ${scenario.currentRunId}`}
+                : importStatus
+                  ? importStatus
+                  : `${scenario.baselineRunId} ↔ ${scenario.currentRunId}`}
           </span>
 
           <div className="step-controls" role="group" aria-label="Turn step controls">

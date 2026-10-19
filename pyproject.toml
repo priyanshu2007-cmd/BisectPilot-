@@ -1,14 +1,12 @@
 [project]
 name = "bisectpilot"
 version = "0.1.0"
-description = "Add your description here"
+description = "Deterministic AI trace diff and first-drift bisection CLI"
 authors = [
     { name = "Priyanshu Yadav", email = "spec.priyanshu@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = [
-    "browser-use>=0.13.11",
-]
+dependencies = []
 
 [project.scripts]
 bisectpilot = "bisectpilot:main"

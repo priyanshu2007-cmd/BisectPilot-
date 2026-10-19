@@ -1,49 +1,45 @@
 {
-  "explorer.compactFolders": true,
+  "explorer.compactFolders": false,
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.expand": false,
   "explorer.fileNesting.patterns": {
-    "AI_BRAIN.md": "AI_RULES.md, SESSION_MEMORY.md, ANTIGRAVITY_MASTER_PROMPT.txt",
+    "AI_BRAIN.md": "AI_RULES.md, SESSION_MEMORY.md, ANTIGRAVITY_MASTER_PROMPT.txt, SPEC.md",
     "AGENTS.md": "CLAUDE.md, GEMINI.md, .mcp.json, opencode.json",
     "pyproject.toml": "uv.lock, .python-version",
     ".gitignore": ".ignore, .env.example, .nvmrc",
-    "package.json": "package-lock.json, tsconfig.json, next.config.*, postcss.config.*, eslint.config.*, Dockerfile, Makefile",
-    "tsconfig.json": "next-env.d.ts, *.tsbuildinfo"
+    "package.json": "package-lock.json, tsconfig.json, next-env.d.ts, next.config.*, postcss.config.*, eslint.config.*, Dockerfile, Makefile, .nvmrc, .env.example"
   },
   "files.exclude": {
-    "**/.git": true,
-    "**/.DS_Store": true,
     "**/__pycache__": true,
     "**/*.pyc": true,
     "**/.venv": true,
     "**/node_modules": true,
     "**/.next": true,
     "**/*.tsbuildinfo": true,
-    "graft": true
+    ".{agent,agents,claude,kilo,opencode}": true,
+    "ai-agent-toolkit": true,
+    "graft": true,
+    "skills*": true,
+    "tasks": true,
+    "is-website-vulnerable": true,
+    "VibeSec-Skill": true
   },
   "search.exclude": {
-    "**/.venv": true,
-    "**/node_modules": true,
-    "**/.next": true,
     "**/dist": true,
     "**/build": true,
     "**/out": true,
     "**/coverage": true,
     "**/*.lock": true,
-    "**/package-lock.json": true,
-    "**/*.tsbuildinfo": true,
-    "graft/**": true,
-    "ai-agent-toolkit/repositories/**": true,
-    "skills /**": true
+    "**/package-lock.json": true
   },
   "files.watcherExclude": {
-    "**/.git/objects/**": true,
-    "**/.git/subtree-cache/**": true,
     "**/.venv/**": true,
-    "**/node_modules/**": true,
     "**/.next/**": true,
+    ".{agent,agents,claude,kilo,opencode}/**": true,
+    "ai-agent-toolkit/**": true,
     "graft/**": true,
-    "ai-agent-toolkit/repositories/**": true,
-    "skills /**": true
+    "skills*/**": true,
+    "is-website-vulnerable/**": true,
+    "VibeSec-Skill/**": true
   }
 }
