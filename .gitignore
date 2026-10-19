@@ -9,3 +9,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+node_modules/
+dist/
+.bisectpilot/
+*.tsbuildinfo

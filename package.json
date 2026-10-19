@@ -1,0 +1,29 @@
+{
+  "name": "bisectpilot",
+  "version": "0.1.0",
+  "description": "Local-first, evidence-first Git regression bisection engine and CLI",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "bisectpilot": "./dist/src/index.js"
+  },
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./contracts": "./dist/src/contracts/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json && node --test dist/tests/unit/*.test.js dist/tests/integration/*.test.js",
+    "test:unit": "tsc -p tsconfig.json && node --test dist/tests/unit/*.test.js",
+    "test:integration": "tsc -p tsconfig.json && node --test dist/tests/integration/*.test.js",
+    "test:py": "PYTHONPATH=src python3 -m unittest discover -s tests -v"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,12 @@
+node_modules
+dist
+.venv
+.git
+website/node_modules
+website/.next
+ai-agent-toolkit
+skills *
+*.log
+.DS_Store
+.env*
+!.env.example
