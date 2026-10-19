@@ -7,7 +7,7 @@
     "AGENTS.md": "CLAUDE.md, GEMINI.md, .mcp.json, opencode.json",
     "pyproject.toml": "uv.lock, .python-version",
     ".gitignore": ".ignore, .env.example, .nvmrc",
-    "package.json": "package-lock.json, tsconfig.json, next-env.d.ts, next.config.*, postcss.config.*, eslint.config.*, Dockerfile, Makefile, .nvmrc, .env.example"
+    "package.json": "package-lock.json, tsconfig.json, next-env.d.ts, next.config.*, postcss.config.*, eslint.config.*, Dockerfile, .dockerignore, Makefile, .nvmrc, .env.example"
   },
   "files.exclude": {
     "**/__pycache__": true,
