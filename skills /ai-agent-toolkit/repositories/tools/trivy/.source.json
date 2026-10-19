@@ -1,0 +1,7 @@
+{
+  "name": "trivy",
+  "repo": "aquasecurity/trivy",
+  "commit": "088b9706d7e3af33ef1a8d2dee305370df714293",
+  "mode": "copy",
+  "fetched_at": "2026-10-14T19:38:27Z"
+}

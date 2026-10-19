@@ -1,0 +1,8 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "context7": { "type": "local", "command": ["npx", "-y", "@upstash/context7-mcp"], "enabled": true },
+    "playwright": { "type": "local", "command": ["npx", "@playwright/mcp@latest"], "enabled": true },
+    "rea": { "type": "local", "command": ["npx", "-y", "rea-agents", "mcp"], "enabled": true }
+  }
+}

@@ -1,0 +1,7 @@
+# local notes and caches stay on the machine
+local/*
+!local/README.md
+!local/.gitkeep
+reports/*.tmp
+*.bak.*
+.DS_Store

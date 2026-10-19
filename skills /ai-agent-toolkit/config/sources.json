@@ -1,0 +1,1250 @@
+[
+ {
+  "name": "caveman",
+  "repo": "JuliusBrussee/caveman",
+  "url": "https://github.com/JuliusBrussee/caveman",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Terse 'caveman' output style and token-saving skills",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Copy skills/<name> into an agent skills dir (install-skills.sh)",
+  "dependencies": [],
+  "security_notes": "Skill text is untrusted; review before enabling hooks.",
+  "agents_verified": []
+ },
+ {
+  "name": "buildwithclaude",
+  "repo": "davepoon/buildwithclaude",
+  "url": "https://github.com/davepoon/buildwithclaude",
+  "category": "reference-libraries",
+  "kind": "reference catalogue",
+  "purpose": "Community marketplace of 390+ skills/agents/commands/hooks",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "mcp-servers.json"
+  ],
+  "install_method": "Browse catalogue; install individual plugins from upstream",
+  "dependencies": [],
+  "security_notes": "Mixed-provenance community content with per-plugin licenses; only README and MCP list retained.",
+  "agents_verified": []
+ },
+ {
+  "name": "browser-use",
+  "repo": "browser-use/browser-use",
+  "url": "https://github.com/browser-use/browser-use",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Python library/agent for LLM-driven browser automation",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "uv pip install browser-use (library); skills/ holds agent skills",
+  "dependencies": [
+   "python>=3.11"
+  ],
+  "security_notes": "Drives a real browser; cloud features need an API key (not configured).",
+  "agents_verified": []
+ },
+ {
+  "name": "browser-harness",
+  "repo": "browser-use/browser-harness",
+  "url": "https://github.com/browser-use/browser-harness",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Direct CDP browser control for agents (uses logged-in Chrome)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "SKILL.md",
+   "install.md",
+   "skills",
+   "interaction-skills",
+   "README.md",
+   "AGENTS.md",
+   "pyproject.toml"
+  ],
+  "install_method": "uv tool install --python 3.12 --upgrade --force browser-harness; browser-harness skill",
+  "dependencies": [
+   "uv",
+   "python3.12",
+   "Chrome"
+  ],
+  "security_notes": "Controls the user's real browser session; recordings may capture sensitive pages (off unless consented).",
+  "agents_verified": []
+ },
+ {
+  "name": "agent-human-handoff-nodejs",
+  "repo": "dialogflow/agent-human-handoff-nodejs",
+  "url": "https://github.com/dialogflow/agent-human-handoff-nodejs",
+  "category": "applications",
+  "kind": "application",
+  "purpose": "Dialogflow human-agent handoff sample (Node.js)",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "."
+  ],
+  "install_method": "Reference sample; npm install in the folder if used",
+  "dependencies": [
+   "node",
+   "Dialogflow project"
+  ],
+  "security_notes": "Sample app; needs GCP credentials if run. Not a skill.",
+  "agents_verified": []
+ },
+ {
+  "name": "taste-skill",
+  "repo": "Leonxlnx/taste-skill",
+  "url": "https://github.com/Leonxlnx/taste-skill",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Design-taste skills for non-generic frontend output",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Copy skills/<name> into agent skills dir",
+  "dependencies": [],
+  "security_notes": "Skill text untrusted.",
+  "agents_verified": []
+ },
+ {
+  "name": "ECC",
+  "repo": "affaan-m/ECC",
+  "url": "https://github.com/affaan-m/ECC",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Large agent harness collection (1000+ skills); curated subset retained",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "skills/accessibility",
+   "skills/api-design",
+   "skills/browser-qa",
+   "skills/context-budget",
+   "skills/deep-research",
+   "skills/documentation-lookup",
+   "skills/e2e-testing",
+   "skills/frontend-a11y",
+   "skills/frontend-patterns",
+   "skills/mcp-server-patterns",
+   "skills/react-patterns",
+   "skills/react-performance",
+   "skills/react-testing",
+   "skills/security-review",
+   "skills/security-scan",
+   "skills/seo",
+   "skills/verification-loop"
+  ],
+  "install_method": "Copy chosen skills/<name>; full repo is ~100MB and not retained",
+  "dependencies": [],
+  "security_notes": "Curated subset only; other skills/hooks not reviewed.",
+  "agents_verified": []
+ },
+ {
+  "name": "superpowers",
+  "repo": "obra/superpowers",
+  "url": "https://github.com/obra/superpowers",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Process skills: brainstorming, TDD, debugging, plans, verification",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Plugin marketplace or copy skills/<name>",
+  "dependencies": [],
+  "security_notes": "Skill text untrusted.",
+  "agents_verified": []
+ },
+ {
+  "name": "Agent-Reach",
+  "repo": "Panniantong/Agent-Reach",
+  "url": "https://github.com/Panniantong/Agent-Reach",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Gives agents internet/platform access via CLI tools",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "agent_reach/skill",
+   "README.md",
+   "pyproject.toml"
+  ],
+  "install_method": "pip/uv install per upstream README (not run by toolkit)",
+  "dependencies": [
+   "python"
+  ],
+  "security_notes": "Installs third-party scrapers/cookies handling; review before installing.",
+  "agents_verified": []
+ },
+ {
+  "name": "public-apis",
+  "repo": "public-apis/public-apis",
+  "url": "https://github.com/public-apis/public-apis",
+  "category": "reference-libraries",
+  "kind": "reference catalogue",
+  "purpose": "Curated list of free public APIs",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "Reference only; grep README.md",
+  "dependencies": [],
+  "security_notes": "Listed APIs are third-party; check each ToS.",
+  "agents_verified": []
+ },
+ {
+  "name": "n0shake-Public-APIs",
+  "repo": "n0shake/Public-APIs",
+  "url": "https://github.com/n0shake/Public-APIs",
+  "category": "reference-libraries",
+  "kind": "reference catalogue",
+  "purpose": "Public API list (alternative catalogue)",
+  "license": "none found",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Reference by URL only",
+  "dependencies": [],
+  "security_notes": "No LICENSE file in repo, so content is not redistributed; pointer only.",
+  "agents_verified": [],
+  "license_verification": "repo file list inspected on 2026-10-09: no LICENSE file"
+ },
+ {
+  "name": "anythingmcp",
+  "repo": "HelpCode-ai/anythingmcp",
+  "url": "https://github.com/HelpCode-ai/anythingmcp",
+  "category": "applications",
+  "kind": "application",
+  "purpose": "Self-hosted platform turning APIs into MCP servers",
+  "license": "AGPL-3.0",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Docker compose per upstream; see guides/MCP_SETUP.md",
+  "dependencies": [
+   "docker"
+  ],
+  "security_notes": "AGPL-3.0 network copyleft; not redistributed. Self-hosting stores API credentials.",
+  "agents_verified": [],
+  "license_verification": "LICENSE read during inspection on 2026-10-09 (GNU AGPL v3 text); file not redistributed"
+ },
+ {
+  "name": "api-anything",
+  "repo": "goodnight000/api-anything",
+  "url": "https://github.com/goodnight000/api-anything",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Skill to wrap an API/CLI into agent tools",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Copy skills/api-anything",
+  "dependencies": [],
+  "security_notes": "Generates code that calls APIs; review before running.",
+  "agents_verified": []
+ },
+ {
+  "name": "vercel-agent-skills",
+  "repo": "vercel-labs/agent-skills",
+  "url": "https://github.com/vercel-labs/agent-skills",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Official Vercel skills: React/Next perf, design review, deploy, optimize",
+  "license": "MIT (declared in package.json/SKILL.md; no LICENSE file in repo)",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md",
+   "AGENTS.md",
+   "package.json"
+  ],
+  "install_method": "npx skills add vercel-labs/agent-skills  (or copy skills/<name>)",
+  "dependencies": [],
+  "security_notes": "deploy/optimize skills act on Vercel account; need explicit user authorization.",
+  "agents_verified": [
+   "claude-code",
+   "opencode",
+   "antigravity",
+   "kilo-code"
+  ]
+ },
+ {
+  "name": "andrej-karpathy-skills",
+  "repo": "multica-ai/andrej-karpathy-skills",
+  "url": "https://github.com/multica-ai/andrej-karpathy-skills",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Coding-behavior guidelines derived from Karpathy's LLM-coding notes",
+  "license": "MIT (declared in SKILL.md; no LICENSE file in repo)",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Copy skills/karpathy-guidelines",
+  "dependencies": [],
+  "security_notes": "Skill text untrusted.",
+  "agents_verified": []
+ },
+ {
+  "name": "i-have-adhd",
+  "repo": "ayghri/i-have-adhd",
+  "url": "https://github.com/ayghri/i-have-adhd",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Skill shaping replies for ADHD-friendly, scannable output",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Copy skills/i-have-adhd",
+  "dependencies": [],
+  "security_notes": "Skill text untrusted.",
+  "agents_verified": []
+ },
+ {
+  "name": "ponytail",
+  "repo": "DietrichGebert/ponytail",
+  "url": "https://github.com/DietrichGebert/ponytail",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Minimal-change coding style and review skills",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Copy skills/<name> or install the plugin",
+  "dependencies": [],
+  "security_notes": "Skill text untrusted.",
+  "agents_verified": []
+ },
+ {
+  "name": "Graft",
+  "repo": "trailhq/Graft",
+  "url": "https://github.com/trailhq/Graft",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Code-graph MCP server for symbol/call lookup",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   ".claude/skills/graft"
+  ],
+  "install_method": "Per upstream README (not run by toolkit)",
+  "dependencies": [],
+  "security_notes": "Indexes the local repo; MCP server runs locally.",
+  "agents_verified": []
+ },
+ {
+  "name": "archify",
+  "repo": "tt-a1i/archify",
+  "url": "https://github.com/tt-a1i/archify",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Architecture/sequence/state diagram skill producing standalone HTML",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "archify",
+   "README.md"
+  ],
+  "install_method": "Copy archify/ into an agent skills dir",
+  "dependencies": [],
+  "security_notes": "Skill text untrusted.",
+  "agents_verified": []
+ },
+ {
+  "name": "is-website-vulnerable",
+  "repo": "lirantal/is-website-vulnerable",
+  "url": "https://github.com/lirantal/is-website-vulnerable",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "CLI detecting known-vulnerable JS libraries on a URL",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "npx is-website-vulnerable <url> (not run by toolkit)",
+  "dependencies": [
+   "node"
+  ],
+  "security_notes": "Contacts the target URL: only run against sites you own or are authorized to test.",
+  "agents_verified": []
+ },
+ {
+  "name": "awesome-shadcn-ui",
+  "repo": "birobirobiro/awesome-shadcn-ui",
+  "url": "https://github.com/birobirobiro/awesome-shadcn-ui",
+  "category": "reference-libraries",
+  "kind": "reference catalogue",
+  "purpose": "Curated shadcn/ui components, registries and tools",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "Reference; grep README.md",
+  "dependencies": [],
+  "security_notes": "Third-party links.",
+  "agents_verified": []
+ },
+ {
+  "name": "context7",
+  "repo": "upstash/context7",
+  "url": "https://github.com/upstash/context7",
+  "category": "tools",
+  "kind": "integration",
+  "purpose": "Up-to-date library docs via MCP / ctx7 CLI",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "MCP: npx -y @upstash/context7-mcp ; CLI: npx ctx7@latest",
+  "dependencies": [
+   "node"
+  ],
+  "security_notes": "Queries leave the machine: never include secrets. API key optional (env CONTEXT7_API_KEY).",
+  "agents_verified": []
+ },
+ {
+  "name": "gsd-core",
+  "repo": "open-gsd/gsd-core",
+  "url": "https://github.com/open-gsd/gsd-core",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Spec-driven 'get shit done' workflow framework (72 skills upstream)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "Per upstream README; full repo ~90MB not retained",
+  "dependencies": [
+   "node"
+  ],
+  "security_notes": "Installs commands/hooks into agent config; review first.",
+  "agents_verified": []
+ },
+ {
+  "name": "VibeSec-Skill",
+  "repo": "BehiSecc/VibeSec-Skill",
+  "url": "https://github.com/BehiSecc/VibeSec-Skill",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Secure-coding guidance skill",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "."
+  ],
+  "install_method": "Copy SKILL.md dir",
+  "dependencies": [],
+  "security_notes": "Skill text untrusted.",
+  "agents_verified": []
+ },
+ {
+  "name": "appwrite",
+  "repo": "appwrite/appwrite",
+  "url": "https://github.com/appwrite/appwrite",
+  "category": "applications",
+  "kind": "application",
+  "purpose": "Self-hosted backend platform (~760MB repo)",
+  "license": "BSD-3-Clause",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Docker per upstream docs",
+  "dependencies": [
+   "docker"
+  ],
+  "security_notes": "Large app; not downloaded. Provisioning is out of scope.",
+  "agents_verified": [],
+  "license_verification": "LICENSE read during inspection on 2026-10-09 (BSD-3-Clause text); file not redistributed"
+ },
+ {
+  "name": "strix",
+  "repo": "usestrix/strix",
+  "url": "https://github.com/usestrix/strix",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Autonomous AI pentesting agent plus security skills",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Per upstream README (pipx/uv; needs LLM key and Docker)",
+  "dependencies": [
+   "docker",
+   "LLM API key"
+  ],
+  "security_notes": "Offensive tool: use ONLY on systems you are authorized to test.",
+  "agents_verified": []
+ },
+ {
+  "name": "emilkowalski-skills",
+  "repo": "emilkowalski/skills",
+  "url": "https://github.com/emilkowalski/skills",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Animation/UI-engineering skills by Emil Kowalski",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "skills",
+   "README.md"
+  ],
+  "install_method": "Copy skills/<name>",
+  "dependencies": [],
+  "security_notes": "Skill text untrusted.",
+  "agents_verified": []
+ },
+ {
+  "name": "impeccable",
+  "repo": "pbakaus/impeccable",
+  "url": "https://github.com/pbakaus/impeccable",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Frontend design-quality skill with audit/polish commands",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "plugin/skills/impeccable",
+   "README.md"
+  ],
+  "install_method": "npx skills add pbakaus/impeccable (or copy)",
+  "dependencies": [],
+  "security_notes": "Skill ships scripts; review scripts/ before running.",
+  "agents_verified": [
+   "claude-code",
+   "opencode",
+   "antigravity"
+  ]
+ },
+ {
+  "name": "ruflo",
+  "repo": "ruvnet/ruflo",
+  "url": "https://github.com/ruvnet/ruflo",
+  "category": "tools",
+  "kind": "integration",
+  "purpose": "Multi-agent orchestration / MCP platform (~215MB repo)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "Per upstream README; already configured globally on this machine by user",
+  "dependencies": [
+   "node"
+  ],
+  "security_notes": "Large; only README retained.",
+  "agents_verified": []
+ },
+ {
+  "name": "spec-kit",
+  "repo": "github/spec-kit",
+  "url": "https://github.com/github/spec-kit",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Spec-driven development CLI (specify)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   ".github/skills"
+  ],
+  "install_method": "uv tool install specify-cli --from git+https://github.com/github/spec-kit.git",
+  "dependencies": [
+   "uv",
+   "python"
+  ],
+  "security_notes": "Installs templates into the project; review diffs.",
+  "agents_verified": []
+ },
+ {
+  "name": "rea",
+  "repo": "morluto/rea",
+  "url": "https://github.com/morluto/rea",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Reverse engineer apps and native binaries with agents (MCP server + skill)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "docs/cli-mcp.md",
+   "server.json",
+   "DISCLAIMER.md",
+   "SECURITY.md",
+   ".agents/skills/reverse-engineer-anything"
+  ],
+  "install_method": "See README and docs/cli-mcp.md (upstream install.sh not retained); skill: reverse-engineer-anything",
+  "dependencies": [
+   "node"
+  ],
+  "security_notes": "Analyses third-party binaries/apps; use only on software you are authorised to analyse. Read DISCLAIMER.md.",
+  "agents_verified": []
+ },
+ {
+  "name": "serena",
+  "repo": "oraios/serena",
+  "url": "https://github.com/oraios/serena",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Semantic code retrieval and editing via MCP (language servers)",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "uvx --from git+https://github.com/oraios/serena serena start-mcp-server (verify in README)",
+  "dependencies": [
+   "uv"
+  ],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "codebase-memory-mcp",
+  "repo": "DeusData/codebase-memory-mcp",
+  "url": "https://github.com/DeusData/codebase-memory-mcp",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Code intelligence MCP server: persistent codebase knowledge graph",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "See README (single binary installer; upstream install.sh not retained)",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "claude-mem",
+  "repo": "thedotmack/claude-mem",
+  "url": "https://github.com/thedotmack/claude-mem",
+  "category": "skills",
+  "kind": "plugin",
+  "purpose": "Persistent memory across agent sessions (capture, compress, re-inject)",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "plugin/skills"
+  ],
+  "install_method": "See README for plugin install; skills/ holds its bundled skills",
+  "dependencies": [
+   "node"
+  ],
+  "security_notes": "Installs hooks and a background worker that record session activity; review what is stored.",
+  "agents_verified": []
+ },
+ {
+  "name": "laya",
+  "repo": "NandhaKishorM/laya",
+  "url": "https://github.com/NandhaKishorM/laya",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Non-autoregressive decision engine (typed choice/score/yes-no) with an MCP server; use for structured decisions, routing, triage, tool pre-screening",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "LOCAL_SETUP.md",
+   "AGENTS.md",
+   "docs/reference/agent.md",
+   "docs/cli-mcp.md"
+  ],
+  "install_method": "See LOCAL_SETUP.md; MCP server lives in laya/mcp upstream. No SKILL.md exists upstream; toolkit routes to this entry via skill-search",
+  "dependencies": [
+   "python"
+  ],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "ast-grep",
+  "repo": "ast-grep/ast-grep",
+  "url": "https://github.com/ast-grep/ast-grep",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Structural code search and rewrite using syntax trees",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "brew install ast-grep (or see README)",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "everything-claude-code",
+  "repo": "WorldFlowAI/everything-claude-code",
+  "url": "https://github.com/WorldFlowAI/everything-claude-code",
+  "category": "skills",
+  "kind": "skill pack",
+  "purpose": "Agents, commands, skills, rules and hooks for Claude Code",
+  "license": "none declared upstream",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Pointer only: no license file upstream. Clone manually after checking terms. Overlaps with ECC and superpowers",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "gstack",
+  "repo": "garrytan/gstack",
+  "url": "https://github.com/garrytan/gstack",
+  "category": "skills",
+  "kind": "skill pack",
+  "purpose": "Opinionated role-based Claude Code workflow (65 skills)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "See README (upstream setup script, needs bun); overlaps with superpowers/ECC",
+  "dependencies": [
+   "bun"
+  ],
+  "security_notes": "Upstream setup script writes into ~/.claude; review before running.",
+  "agents_verified": []
+ },
+ {
+  "name": "taskmaster",
+  "repo": "blader/taskmaster",
+  "url": "https://github.com/blader/taskmaster",
+  "category": "skills",
+  "kind": "hook+skill",
+  "purpose": "Stop hook that keeps the agent working until all tasks are complete",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "."
+  ],
+  "install_method": "See README; stop hook is Claude Code specific",
+  "dependencies": [],
+  "security_notes": "Registers a Stop hook; review hook script before enabling.",
+  "agents_verified": []
+ },
+ {
+  "name": "worktrunk",
+  "repo": "max-sixty/worktrunk",
+  "url": "https://github.com/max-sixty/worktrunk",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "CLI for git worktree management for parallel agent workflows",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "brew install worktrunk (verify in README)",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "trail-code",
+  "repo": "trailhq/Trail-Code",
+  "url": "https://github.com/trailhq/Trail-Code",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Context-aware tooling for coding agents (Graft-based)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   ".claude/skills/graft"
+  ],
+  "install_method": "See README",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "anthropic-skills",
+  "repo": "anthropics/skills",
+  "url": "https://github.com/anthropics/skills",
+  "category": "skills",
+  "kind": "skill pack",
+  "purpose": "Official Anthropic skills; retained: frontend-design, webapp-testing, mcp-builder, skill-creator, claude-api",
+  "license": "per-skill LICENSE.txt",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "skills/frontend-design",
+   "skills/webapp-testing",
+   "skills/mcp-builder",
+   "skills/skill-creator",
+   "skills/claude-api"
+  ],
+  "install_method": "Copy skills/<name> into an agent skills dir (install-skills.sh). Other upstream skills (docx/pdf/pptx/xlsx) are source-available, not retained",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "vercel-skills-cli",
+  "repo": "vercel-labs/skills",
+  "url": "https://github.com/vercel-labs/skills",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Skills CLI: discover and install skills across agents (npx skills)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "skills/find-skills"
+  ],
+  "install_method": "npx skills add <owner/repo>",
+  "dependencies": [
+   "node"
+  ],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "gitleaks",
+  "repo": "gitleaks/gitleaks",
+  "url": "https://github.com/gitleaks/gitleaks",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Find secrets in repos and commits",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "brew install gitleaks",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "trufflehog",
+  "repo": "trufflesecurity/trufflehog",
+  "url": "https://github.com/trufflesecurity/trufflehog",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Find, verify and analyse leaked credentials",
+  "license": "AGPL-3.0",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "brew install trufflehog",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "semgrep",
+  "repo": "semgrep/semgrep",
+  "url": "https://github.com/semgrep/semgrep",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Static analysis with source-like patterns",
+  "license": "LGPL-2.1",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "brew install semgrep",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "trivy",
+  "repo": "aquasecurity/trivy",
+  "url": "https://github.com/aquasecurity/trivy",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Scan dependencies, secrets, IaC and containers",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "brew install trivy",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "nuclei",
+  "repo": "projectdiscovery/nuclei",
+  "url": "https://github.com/projectdiscovery/nuclei",
+  "category": "tools",
+  "kind": "tool",
+  "purpose": "Template-based vulnerability scanner",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "brew install nuclei",
+  "dependencies": [],
+  "security_notes": "Only scan systems you are authorised to test.",
+  "agents_verified": []
+ },
+ {
+  "name": "playwright-mcp",
+  "repo": "microsoft/playwright-mcp",
+  "url": "https://github.com/microsoft/playwright-mcp",
+  "category": "tools",
+  "kind": "mcp server",
+  "purpose": "Playwright browser automation MCP server",
+  "license": "Apache-2.0",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "npx @playwright/mcp@latest",
+  "dependencies": [
+   "node"
+  ],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "github-mcp-server",
+  "repo": "github/github-mcp-server",
+  "url": "https://github.com/github/github-mcp-server",
+  "category": "tools",
+  "kind": "mcp server",
+  "purpose": "Official GitHub MCP server",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "See README; needs a GitHub token supplied via env var (not configured)",
+  "dependencies": [],
+  "security_notes": "Requires a personal access token; scope it minimally and keep it out of config files.",
+  "agents_verified": []
+ },
+ {
+  "name": "apple-design-skill",
+  "repo": "dickwu/apple-design-skill",
+  "url": "https://github.com/dickwu/apple-design-skill",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Apple HIG UI/UX reviewer for cross-platform apps",
+  "license": "none declared upstream",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Pointer only: no license file upstream. Clone manually after checking terms",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "swiftui-examples",
+  "repo": "ivanvorobei/SwiftUI",
+  "url": "https://github.com/ivanvorobei/SwiftUI",
+  "category": "reference-libraries",
+  "kind": "examples",
+  "purpose": "SwiftUI example projects (WWDC19 era)",
+  "license": "MIT",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Pointer only (image-heavy repo): git clone --depth 1",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "shadcn-ui",
+  "repo": "shadcn-ui/ui",
+  "url": "https://github.com/shadcn-ui/ui",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "shadcn/ui; retained: shadcn skill (component usage and registry workflow)",
+  "license": "MIT",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "skills/shadcn"
+  ],
+  "install_method": "Copy skills/shadcn; MCP: npx shadcn@latest mcp init",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "penpot",
+  "repo": "penpot/penpot",
+  "url": "https://github.com/penpot/penpot",
+  "category": "applications",
+  "kind": "application",
+  "purpose": "Open-source design and prototyping platform",
+  "license": "MPL-2.0",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Pointer only (large): self-host or use penpot.app",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "openwhispr",
+  "repo": "OpenWhispr/openwhispr",
+  "url": "https://github.com/OpenWhispr/openwhispr",
+  "category": "tools",
+  "kind": "app",
+  "purpose": "Voice dictation app; ships agent skills (openwhispr-api, openwhispr-cli)",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "agent-skills"
+  ],
+  "install_method": "Desktop app: see README",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "coucou",
+  "repo": "Louis-CFM/coucou",
+  "url": "https://github.com/Louis-CFM/coucou",
+  "category": "applications",
+  "kind": "application",
+  "purpose": "Mac notch/iPhone companion that monitors coding agents",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "See README",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "awesome-freellm-apis",
+  "repo": "open-free-llm-api/awesome-freellm-apis",
+  "url": "https://github.com/open-free-llm-api/awesome-freellm-apis",
+  "category": "reference-libraries",
+  "kind": "reference catalogue",
+  "purpose": "Directory of free LLM APIs and providers",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "."
+  ],
+  "install_method": "Browse; limits change often",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "mirofish",
+  "repo": "666ghj/MiroFish",
+  "url": "https://github.com/666ghj/MiroFish",
+  "category": "applications",
+  "kind": "application",
+  "purpose": "Swarm-intelligence prediction engine",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md"
+  ],
+  "install_method": "See README",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "minimind-in-depth",
+  "repo": "hans0809/MiniMind-in-Depth",
+  "url": "https://github.com/hans0809/MiniMind-in-Depth",
+  "category": "reference-libraries",
+  "kind": "learning",
+  "purpose": "Source walkthrough of the MiniMind small LLM",
+  "license": "none declared upstream",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Pointer only: no license file upstream",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "slopmonster",
+  "repo": "ItsssssJack/SlopMonster",
+  "url": "https://github.com/ItsssssJack/SlopMonster",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Lint and cleanse AI-written copy (content, not code)",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "."
+  ],
+  "install_method": "Copy as a skill; Python tooling",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "agent-skills-addyosmani",
+  "repo": "addyosmani/agent-skills",
+  "url": "https://github.com/addyosmani/agent-skills",
+  "category": "skills",
+  "kind": "skill pack",
+  "purpose": "Production-grade engineering skills (planning, debugging, testing, review): closest match to 'Coding Agent Skills'",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "AGENTS.md",
+   "skills"
+  ],
+  "install_method": "Copy skills/<name> (install-skills.sh)",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "agent-reviewer-skills",
+  "repo": "kvsankar/agent-reviewer-skills",
+  "url": "https://github.com/kvsankar/agent-reviewer-skills",
+  "category": "skills",
+  "kind": "skill pack",
+  "purpose": "Code review, requirements analysis and software quality skills (upstream notes no conclusive gain over plain review)",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "reviewers"
+  ],
+  "install_method": "Copy reviewers/<name> as skills",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "token-efficiency",
+  "repo": "undefdev/token-efficiency",
+  "url": "https://github.com/undefdev/token-efficiency",
+  "category": "skills",
+  "kind": "skill",
+  "purpose": "Teaches agents to minimise token waste in tool use and data processing",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "."
+  ],
+  "install_method": "Copy skills/ into an agent skills dir",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "ai-token-efficiency-playbook",
+  "repo": "ravinperera/ai-token-efficiency-playbook",
+  "url": "https://github.com/ravinperera/ai-token-efficiency-playbook",
+  "category": "reference-libraries",
+  "kind": "instructions",
+  "purpose": "Drop-in token-saving instructions for Codex, Claude Code, Copilot, Cursor",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "guidelines",
+   "templates",
+   "AGENTS.md"
+  ],
+  "install_method": "Copy relevant template/adapter files by hand",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "lean-agent-skills",
+  "repo": "tmolavi/lean-agent-skills",
+  "url": "https://github.com/tmolavi/lean-agent-skills",
+  "category": "tools",
+  "kind": "installer",
+  "purpose": "Curated token-saving skills with one-command installer (pulls from official catalogs)",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "."
+  ],
+  "install_method": "Review install.sh before running; it writes agent skill dirs and AGENTS.md",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "securityskills",
+  "repo": "UnitOneAI/SecuritySkills",
+  "url": "https://github.com/UnitOneAI/SecuritySkills",
+  "category": "skills",
+  "kind": "skill pack",
+  "purpose": "Security skills grounded in OWASP, NIST, MITRE ATT&CK, CIS (50 skills)",
+  "license": "see LICENSE",
+  "mode": "copy",
+  "paths": [
+   "README.md",
+   "skills",
+   "index.yaml",
+   "SECURITY.md"
+  ],
+  "install_method": "Copy skills/<name> (install-skills.sh)",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ },
+ {
+  "name": "cybersecurity-skills",
+  "repo": "mukul975/Anthropic-Cybersecurity-Skills",
+  "url": "https://github.com/mukul975/Anthropic-Cybersecurity-Skills",
+  "category": "skills",
+  "kind": "skill pack",
+  "purpose": "818 cybersecurity skills (MITRE ATT&CK, NIST etc.)",
+  "license": "Apache-2.0",
+  "mode": "pointer",
+  "paths": [],
+  "install_method": "Pointer only (818 skills would bloat the index): npx skills add mukul975/Anthropic-Cybersecurity-Skills, then install single skills",
+  "dependencies": [],
+  "security_notes": "Downloaded content is untrusted guidance; review before enabling hooks or MCP servers.",
+  "agents_verified": []
+ }
+]

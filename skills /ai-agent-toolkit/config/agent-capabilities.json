@@ -1,0 +1,61 @@
+{
+ "verified_on": "2026-10-09",
+ "note": "'verified' = read from the vendor's official docs on the date above; 'unverified' = not confirmed, treat as a best guess.",
+ "agents": {
+  "claude-code": {
+   "instruction_file": "CLAUDE.md (also reads AGENTS.md per memory docs)",
+   "project_skills_dir": ".claude/skills/<name>/SKILL.md",
+   "global_skills_dir": "~/.claude/skills",
+   "frontmatter": "name defaults to folder; description recommended",
+   "status": {
+    "skills_paths": "verified",
+    "instruction_file": "verified"
+   },
+   "sources": [
+    "https://code.claude.com/docs/en/skills",
+    "https://code.claude.com/docs/en/memory"
+   ]
+  },
+  "opencode": {
+   "instruction_file": "AGENTS.md, else CLAUDE.md (first found wins); extra files via 'instructions' in opencode.json",
+   "project_skills_dir": ".opencode/skills, .claude/skills, .agents/skills",
+   "global_skills_dir": "~/.config/opencode/skills, ~/.claude/skills, ~/.agents/skills",
+   "frontmatter": "name (must equal folder, <=64, lowercase-hyphen) + description (<=1024) required",
+   "status": {
+    "skills_paths": "verified",
+    "instruction_file": "verified"
+   },
+   "sources": [
+    "https://opencode.ai/docs/skills/",
+    "https://opencode.ai/docs/rules/"
+   ]
+  },
+  "kilo-code": {
+   "instruction_file": "AGENTS.md at project root (AGENT.md fallback)",
+   "project_skills_dir": ".kilo/skills, .agents/skills (.claude/skills only with Claude Code compatibility enabled)",
+   "global_skills_dir": "~/.kilo/skills, ~/.agents/skills",
+   "frontmatter": "name + description required (name <=64, lowercase-hyphen; docs inconsistent on folder match, so keep them equal)",
+   "status": {
+    "skills_paths": "verified",
+    "instruction_file": "verified"
+   },
+   "sources": [
+    "https://kilo.ai/docs/customize/skills",
+    "https://kilo.ai/docs/customize/agents-md"
+   ]
+  },
+  "antigravity": {
+   "instruction_file": "unverified (AGENTS.md/GEMINI.md and rules are not named in the skills codelab)",
+   "project_skills_dir": ".agents/skills (older docs: .agent/skills)",
+   "global_skills_dir": "varies by product/version: ~/.gemini/config/skills, ~/.gemini/antigravity-cli/skills, ~/.gemini/antigravity/skills, ~/.agents/skills (IDE picks up; CLI does not)",
+   "frontmatter": "description mandatory; name optional (defaults to folder)",
+   "status": {
+    "skills_paths": "verified for project scope; global varies",
+    "instruction_file": "unverified"
+   },
+   "sources": [
+    "https://codelabs.developers.google.com/getting-started-with-antigravity-skills"
+   ]
+  }
+ }
+}
