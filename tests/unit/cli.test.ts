@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import { runCli } from "../../src/cli/index.js";
 import { FakeEngine } from "../../src/contracts/fake-engine.js";
+import { buildFixtureRepo } from "../fixtures/repo-builder.js";
 
 async function captureCliOutput(run: () => Promise<number>): Promise<{
   readonly code: number;
@@ -38,9 +39,24 @@ describe("CLI — Dispatch & Command Behavior", () => {
     assert.equal(code, 0);
   });
 
-  it("runs doctor check successfully on current repository", async () => {
-    const code = await runCli(["doctor", "."]);
-    assert.equal(code, 0);
+  it("runs doctor check successfully on hermetic repository fixture even from non-git cwd", async () => {
+    const fixture = await buildFixtureRepo([
+      {
+        message: "initial commit",
+        files: { "package.json": '{"name":"test"}\n' },
+      },
+    ]);
+    const nonGitDir = mkdtempSync(path.join(os.tmpdir(), "bp-nongit-"));
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(nonGitDir);
+      const code = await runCli(["doctor", fixture.repoDir]);
+      assert.equal(code, 0);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(nonGitDir, { recursive: true, force: true });
+      fixture.cleanup();
+    }
   });
 
   it("initializes a valid starter config file", async () => {
