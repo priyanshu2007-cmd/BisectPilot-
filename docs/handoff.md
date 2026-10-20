@@ -5,10 +5,10 @@
 - **Branch:** `agent-a/engine`
 - **Status:** Completed & Verified (158/158 TypeScript unit + real-Git integration tests passing; 4/4 Python trace diff tests passing; website build clean; npm pack dry-run clean).
 - **ADR & Documentation:**
-  - [`docs/decisions/0001-phase-g0-contracts-and-ts-scaffold.md`](file:///Users/priyanshu/Documents/BisectPilot/docs/decisions/0001-phase-g0-contracts-and-ts-scaffold.md)
-  - [`docs/architecture.md`](file:///Users/priyanshu/Documents/BisectPilot/docs/architecture.md)
-  - [`docs/safety-model.md`](file:///Users/priyanshu/Documents/BisectPilot/docs/safety-model.md)
-  - [`docs/bisectpilot-master-plan-v3.md`](file:///Users/priyanshu/Documents/BisectPilot/docs/bisectpilot-master-plan-v3.md)
+  - [`docs/decisions/0001-phase-g0-contracts-and-ts-scaffold.md`](decisions/0001-phase-g0-contracts-and-ts-scaffold.md)
+  - [`docs/architecture.md`](architecture.md)
+  - [`docs/safety-model.md`](safety-model.md)
+  - [`docs/bisectpilot-master-plan-v3.md`](bisectpilot-master-plan-v3.md)
 - **Key Implemented Capabilities (Step 8 additions):**
   - `src/domain/statistics.ts` — Pure TypeScript sample statistics (`mean`, `variance`, `stdDev`, `p50`, `p95`, `p99`, `min`, `max`), Lanczos logGamma, regularized incomplete beta function via modified Lentz continued fractions, Student's t distribution two-tailed p-values, and Welch's two-sample t-test ($t = \frac{\bar{X}_2 - \bar{X}_1}{\sqrt{s_1^2/n_1 + s_2^2/n_2}}$) with Welch-Satterthwaite degrees of freedom.
   - `src/domain/benchmark.ts` — `parseBenchmarkMetric` for JSON (flat and nested), key-value text, and regex patterns with strict unit checking and NaN/Infinity rejection; `buildBenchmarkStats` with warmup exclusion; `evaluateBenchmarkRegression` combining practical thresholds and statistical significance ($p < \alpha$).

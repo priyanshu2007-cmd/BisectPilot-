@@ -80,6 +80,56 @@ Python, container runtimes, TLS certificates, and website dependencies are **not
 - **Python trace-diff helper (optional supporting tool):** Requires Python `>=3.12` (`pyproject.toml`; tested in CI on Python 3.11+).
 - **Interactive replay website (optional supporting tool):** Located in `website/`; requires its own `npm --prefix website ci` install (Next.js 16, React 19).
 
+## Clean Linux Rebuild
+
+The repository is designed to rebuild without any files from the original
+developer machine. The reproducibility contract is:
+
+- Git history is committed in the repository itself.
+- Root JavaScript dependencies are locked by `package-lock.json`.
+- Website dependencies are locked by `website/package-lock.json`.
+- Python packaging metadata is locked by `uv.lock` and requires no runtime
+  Python dependencies.
+- Node is pinned to `v24.18.0` in `.nvmrc` and Docker uses the matching
+  `node:24.18.0-bookworm-slim` image.
+- Python is pinned to `3.12` in `.python-version`.
+- `.env.example` contains only non-secret local defaults; real `.env*` files are
+  ignored by Git and Docker's build context.
+- `Makefile` provides one aggregate test command: `make test`.
+
+On a clean Linux machine with Git, Node `v24.18.0`, Python `3.12`, npm, and
+GNU Make installed:
+
+```bash
+git clone https://github.com/priyanshu2007-cmd/BisectPilot-.git
+cd BisectPilot-
+nvm install
+nvm use
+make setup
+make build
+make test
+make run
+```
+
+`make test` runs the TypeScript engine tests, Python tests, and website
+typecheck/lint/production build. `make run` performs a CLI smoke run and prints
+the command help. For an actual investigation, use the CLI workflow described
+in [Quick Start](#quick-start).
+
+### Docker rebuild and smoke run
+
+Docker is an alternative when Node/npm are not installed on the host:
+
+```bash
+docker build --tag bisectpilot:local .
+docker run --rm bisectpilot:local --help
+```
+
+The image builds the TypeScript CLI from the locked root npm dependencies and
+runs it as the non-root `node` user. The website is built by `make build` and
+`make test`; it is intentionally a separate static application from the CLI
+runtime image.
+
 ---
 
 ## Installation

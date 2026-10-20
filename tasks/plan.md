@@ -1,6 +1,6 @@
 # Implementation Plan: BisectPilot CLI & Explorer Integration
 
-> **Spec**: [SPEC.md](file:///Users/priyanshu/Documents/BisectPilot/SPEC.md)
+> **Spec**: [SPEC.md](../SPEC.md)
 
 ## Initial Tasks
 

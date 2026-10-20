@@ -122,7 +122,7 @@ No database configured yet. Update this section when database schemas/models are
 
 ## 11. Recent Changes
 
-- 2026-10-19 — Deployed Antigravity AI Brain (`AI_RULES.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `ANTIGRAVITY_MASTER_PROMPT.txt`) and `ai-agent-toolkit` at `/Users/priyanshu/Documents/BisectPilot` root; configured all agents (`antigravity`, `claude-code`, `opencode`, `kilo-code`), installed all skill sets (`everything`), wired `.mcp.json` and `opencode.json`, and ran verification suites.
+- 2026-10-19 — Deployed Antigravity AI Brain (`AI_RULES.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `ANTIGRAVITY_MASTER_PROMPT.txt`) and `ai-agent-toolkit` at the project root; configured all agents (`antigravity`, `claude-code`, `opencode`, `kilo-code`), installed all skill sets (`everything`), wired `.mcp.json` and `opencode.json`, and ran verification suites.
 - 2026-10-19 — Built `website/`: Next.js App Router landing page, deterministic replay console, `/docs`, SEO metadata/routes, responsive CSS system, Dockerfile, Makefile, README, pinned Node runtime, and lockfile.
 - 2026-10-19 — Updated `.vscode/settings.json` for ultra-clean Explorer mode (slimmed via `ponytail-review`), persisted `/learn` updates to `AI_RULES.md` and `.agents/skills/coding-and-debugging/SKILL.md`, and authored `SPEC.md` + `tasks/plan.md` + `tasks/todo.md` for `bisectpilot` CLI & `/explorer` trace integration.
 - 2026-10-20 — Organized and implemented the BisectPilot v3 microlithic TypeScript/Node.js engine (`src/contracts/`, `src/config/`, `src/domain/`, `src/git/`, `src/worktree/`, `src/process/`, `src/oracle/`, `src/ledger/`, `src/session/`, `src/runner/`, `src/reports/`, `src/application/`, `src/cli/`) while preserving `src/bisectpilot/__init__.py`, `website/`, and `ai-agent-toolkit/` intact. Verified with 13/13 TS unit/integration tests and 4/4 Python tests.
@@ -158,39 +158,25 @@ Use this to decide what files should be opened.
 
 ## 13. Current Task Context
 
-Current task:
-Release Verification Milestone & Cross-Platform Hardening:
+Current task: Documentation, Markdown verification, and project onboarding refresh.
 
-1. Fresh-clone end-to-end bisection proof: isolated temporary Git repository, deterministic planted regression (`c3`), JSON/MD/HTML report consistency, HTML XSS escaping, oracle timeout safety, skip budget enforcement (`tests/integration/fresh-clone-e2e.test.ts`).
-2. Durable checkpoint writes: `fsyncSync` of temp checkpoint files and directory synchronization on POSIX in `src/session/checkpoint.ts`.
-3. Process-kill (SIGKILL) crash tests: subprocess termination at persistence write points and clean resumption in `tests/integration/session-resume-recovery.test.ts`.
-4. Schema & repository validation: rejected unsupported `schemaVersion: 99` and wrong-repository checkpoints before bisection mutation.
-5. Recovery documentation: updated CLI `HELP_TEXT`, `README.md`, `docs/architecture.md`, `docs/safety-model.md` with `needs_recovery` lifecycle and blocked-recovery conditions.
-6. Multi-machine mTLS runbook: created `docs/multimachine-mtls-setup.md` detailing dedicated PKI generation, daemon and remote worker deployment, fencing tokens, and network partition tests.
-7. Verification results: `npm test` passes 229 tests (228 pass, 1 skip on macOS); `npm run test:py` passes 4/4; `package-distribution.test.js` passes 3/3; `npm --prefix website run test` builds 8/8 static pages; `npm pack --dry-run` produces 144 files (211.8 kB); `git diff --check` clean.
-8. GitHub Actions CI/CD & Security Hardening:
-   - Fixed cross-platform test discovery in `scripts/run-tests.mjs` and added discovery regression test `tests/unit/test-discovery.test.ts`.
-   - Fixed Windows test failures: double quotes for `git commit -m`, `pathToFileURL` for ESM imports, `fs.realpathSync.native()` for 8.3 short paths, `TerminateProcess` exit code assertions.
-   - Enhanced Podman rootless sandbox inspect parser in `src/adapters/process/sandbox-runtime.ts` for expanded `CapDrop`, string `Entrypoint: ""`, and un-delegated cgroup v2 limits.
-   - Extended `parseFirstBadShaFromBisectOutput` in `src/application/index.ts` for quoted git terms and direct 0-intermediate candidate detection.
-   - Added `--version` and `-v` CLI handlers in `src/cli/index.ts`.
-   - Created `.github/workflows/ci.yml` with full matrix (`ubuntu-latest`, `macos-latest`, `windows-latest` across Node `20.x` & `22.x`), package validation, isolated consumer test, and SPDX SBOM generation.
-   - Added `.github/workflows/codeql.yml` for JS/TS and Python static application security analysis.
-   - Added `.github/workflows/secret-scanning.yml` and `.gitleaks.toml` for Gitleaks secret scanning.
-   - Disabled automated Dependabot update PRs by removing `.github/dependabot.yml` and confirming `dependabot_security_updates` is disabled; closed PRs #5-#8 and deleted remote branches.
-   - Enforced strict master-only branch policy with full offline bundle backup.
+1. `tasks/todo.md` has blank lines around headings and lists; a targeted MD022/MD032/MD038 structural check passes.
+2. Root `README.md` and `website/README.md` explain installation, CLI workflows, website replay, daemon/worker usage, reports, tests, security checks, debugging, and environment-dependent limits.
+3. `docs/architecture.md`, `docs/safety-model.md`, and `docs/handoff.md` agree on request flow, `needs_recovery`, checkpoint `fsyncSync`, and current platform verification gaps.
+4. `uv.lock` was regenerated from the dependency-free `pyproject.toml`; `uv lock --check` passes.
+5. Fresh verification: root TypeScript tests pass across 38 test files with one expected real-container skip; Python tests pass 4/4; website typecheck/lint/build pass; offline npm audits report zero vulnerabilities; redacted Gitleaks scan reports no leaks; package dry-run, CLI doctor/init/plan/help checks, and `git diff --check` pass.
+6. Read-only delegated security/debugging review found no failing implementation tests and recorded remaining concerns: rootless container and interactive browser checks are unavailable locally, GitHub action refs are tag-based, Gitleaks allowlisting is broad, CSP allows inline scripts/styles, and physical multi-machine mTLS remains unverified.
 
 Relevant files:
 
-- `.github/workflows/ci.yml`
-- `.github/workflows/codeql.yml`
-- `.github/workflows/secret-scanning.yml`
-- `.gitleaks.toml`
-- `scripts/run-tests.mjs`
-- `tests/unit/test-discovery.test.ts`
-- `src/cli/index.ts`
-- `src/application/index.ts`
-- `src/adapters/process/sandbox-runtime.ts`
+- `README.md`
+- `website/README.md`
+- `tasks/todo.md`
+- `docs/architecture.md`
+- `docs/safety-model.md`
+- `docs/handoff.md`
+- `pyproject.toml`
+- `uv.lock`
 
 Do not open unrelated files.
 

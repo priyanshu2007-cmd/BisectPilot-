@@ -6,11 +6,12 @@ It prevents `AI_BRAIN.md` from becoming bloated.
 
 ## Current Goal
 
-Complete Release Verification Milestone & Cross-Platform Hardening:
-- Verify fresh-clone isolated end-to-end bisection (`tests/integration/fresh-clone-e2e.test.ts`).
-- Execute and resolve P1 requirements (durability `fsyncSync`, process-kill SIGKILL crash tests, unsupported schema & wrong-repo rejection, CLI recovery documentation, multi-machine mTLS runbook).
-- Audit cross-platform status and declare verified limitations (local rootless container runtime unavailable; physical multi-machine mTLS remains unverified).
-- Provide evidence-based status: `NOT_READY_BLOCKERS_REMAIN`.
+Understand the complete project and leave a verified onboarding path:
+
+- Explain the TypeScript CLI/engine, Python trace helper, and Next.js website.
+- Keep `tasks/todo.md` Markdown-lint clean.
+- Document how to install, run, test, debug, generate reports, use daemon/worker workflows, and perform security checks.
+- Preserve honest environment-dependent limitations and record evidence from a delegated debugging/security review.
 
 ## Release Verification Working Context
 

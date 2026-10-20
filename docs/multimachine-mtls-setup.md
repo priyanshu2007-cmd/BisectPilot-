@@ -121,7 +121,7 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
    ```
 3. Start the Daemon with mTLS enforcement:
    ```bash
-   node dist/src/daemon/cli.js start \
+   node dist/src/index.js daemon start \
      --state-dir /var/run/bisectpilot-daemon \
      --port 8443 \
      --bind 192.168.1.100 \
@@ -154,7 +154,7 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
    ```
 3. Start the Remote Worker service:
    ```bash
-   node dist/src/worker/cli.js start \
+   node dist/src/index.js worker start \
      --state-dir /var/run/bisectpilot-worker \
      --server https://192.168.1.100:8443 \
      --token-file /etc/bisectpilot/daemon.token \
@@ -168,7 +168,7 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 4. Verify registration on Machine A:
    ```bash
    # Status check on Machine A shows active registered worker:
-   node dist/src/daemon/cli.js status --state-dir /var/run/bisectpilot-daemon
+   node dist/src/index.js daemon status --state-dir /var/run/bisectpilot-daemon
    # Expected output includes: worker-node-1, CN=worker-node-1, clientCertFingerprint
    ```
 
@@ -176,11 +176,21 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 
 ## 4. End-to-End Distributed Job Lifecycle Verification
 
-1. **Job Creation**: On Machine A, trigger bisection using the fleet coordinator:
+1. **Job Creation**: On Machine A, enqueue a validated bisection configuration
+   for the remote worker. The configuration must use an explicit `goodRef` and
+   `badRef`; automatic good-endpoint discovery is intentionally not available
+   for asynchronous jobs:
    ```bash
-   bisectpilot bisect --good v1.0.0 --bad v1.2.0 --fleet remote
+   bisectpilot daemon enqueue \
+     --config bisectpilot.config.json \
+     --repository-key default \
+     --state-dir /var/run/bisectpilot-daemon \
+     --yes
    ```
-2. **Scheduling**: Daemon coordinator queues revision evaluation jobs for commits between good and bad bounds.
+2. **Scheduling**: The daemon coordinator queues the bisection job for the
+   configured repository mapping. Native Git Bisect remains sequential inside
+   one session; separate jobs may run on separate workers when their repository
+   mappings and resource limits are independent.
 3. **Claim & Lease**: Worker on Machine B polls, authenticates via mTLS certificate `worker-node-1`, and is granted a job with attempt ID `1` and a 30-second lease with 5-second heartbeat intervals.
 4. **Execution**: Worker isolates revision in dedicated worktree on Machine B, runs the oracle, streams heartbeats back to Machine A.
 5. **Result Submission**: Worker sends cryptographic result payload over mTLS. Machine A validates that:

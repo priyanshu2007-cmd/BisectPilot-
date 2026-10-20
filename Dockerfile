@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS build
+FROM node:24.18.0-bookworm-slim AS build
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
@@ -7,9 +7,12 @@ COPY src ./src
 COPY tests ./tests
 RUN npm run build
 
-FROM node:24-bookworm-slim
+FROM node:24.18.0-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/dist ./dist
+RUN chown -R node:node /app
+USER node
 ENTRYPOINT ["node", "/app/dist/src/index.js"]
+CMD ["--help"]
