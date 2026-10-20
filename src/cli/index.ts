@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { parseArgs } from "node:util";
 import { LocalBisectEngine } from "../application/index.js";
 import type { BisectEngine } from "../contracts/index.js";
 import {
@@ -66,6 +67,120 @@ Usage:
                          5. Checkpoint schemaVersion is unsupported.
 `;
 
+type CliOption = {
+  readonly type: "boolean" | "string";
+  readonly short?: string;
+  readonly multiple?: boolean;
+};
+type CliOptionTable = Readonly<Record<string, CliOption>>;
+
+const GLOBAL_OPTIONS = {
+  help: { type: "boolean", short: "h" },
+  version: { type: "boolean", short: "v" },
+} as const;
+const COMMON_OPTIONS = {
+  config: { type: "string" },
+  good: { type: "string" },
+  bad: { type: "string" },
+  terms: { type: "string" },
+  cwd: { type: "string" },
+  scope: { type: "string" },
+  sandbox: { type: "string" },
+  "sandbox-image": { type: "string" },
+  metric: { type: "string" },
+  threshold: { type: "string" },
+  "relative-regression": { type: "string" },
+  direction: { type: "string" },
+  warmup: { type: "string" },
+  samples: { type: "string" },
+  "min-samples": { type: "string" },
+  "max-samples": { type: "string" },
+  alpha: { type: "string" },
+  unit: { type: "string" },
+  timeout: { type: "string" },
+} as const;
+
+export const CLI_OPTION_TABLES: Readonly<Record<string, CliOptionTable>> = {
+  doctor: GLOBAL_OPTIONS,
+  init: { ...GLOBAL_OPTIONS, out: { type: "string" }, force: { type: "boolean" } },
+  plan: { ...GLOBAL_OPTIONS, ...COMMON_OPTIONS },
+  start: {
+    ...GLOBAL_OPTIONS,
+    ...COMMON_OPTIONS,
+    yes: { type: "boolean" },
+    background: { type: "boolean" },
+    prompt: { type: "boolean" },
+    noisy: { type: "boolean" },
+    "github-summary": { type: "boolean" },
+    "daemon-state-dir": { type: "string" },
+    "repository-key": { type: "string" },
+  },
+  status: { ...GLOBAL_OPTIONS, "session-root": { type: "string" } },
+  resume: { ...GLOBAL_OPTIONS, "session-root": { type: "string" } },
+  report: {
+    ...GLOBAL_OPTIONS,
+    "session-root": { type: "string" },
+    out: { type: "string" },
+    verify: { type: "boolean" },
+    "github-summary": { type: "boolean" },
+    "github-issue": { type: "boolean" },
+    html: { type: "boolean" },
+    json: { type: "boolean" },
+  },
+  cleanup: { ...GLOBAL_OPTIONS, "session-root": { type: "string" }, "dry-run": { type: "boolean" } },
+  list: { ...GLOBAL_OPTIONS, "session-root": { type: "string" } },
+  minimize: {
+    ...GLOBAL_OPTIONS,
+    input: { type: "string" },
+    test: { type: "string" },
+    arg: { type: "string", multiple: true },
+    args: { type: "string" },
+    out: { type: "string" },
+    budget: { type: "string" },
+    timeout: { type: "string" },
+    granularity: { type: "string" },
+    noisy: { type: "boolean" },
+    force: { type: "boolean" },
+    json: { type: "boolean" },
+  },
+};
+
+function protectMinimizerArgs(command: string, args: readonly string[]): string[] {
+  if (command !== "minimize") return [...args];
+  const result: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i]!;
+    const next = args[i + 1];
+    if (token === "--arg" && next !== undefined && next.startsWith("-")) {
+      result.push(`--arg=${next}`);
+      i++;
+    } else {
+      result.push(token);
+    }
+  }
+  return result;
+}
+
+export function parseCommandArguments(argv: readonly string[]):
+  | { readonly ok: true; readonly values: Readonly<Record<string, unknown>>; readonly positionals: readonly string[] }
+  | { readonly ok: false; readonly error: string } {
+  const command = argv[0] === "run" ? "start" : argv[0];
+  const options = command ? CLI_OPTION_TABLES[command] : undefined;
+  if (!options) return { ok: true, values: {}, positionals: argv.slice(1) };
+  try {
+    const parsed = parseArgs({
+      args: protectMinimizerArgs(command ?? "", argv.slice(1)),
+      options,
+      strict: true,
+      allowPositionals: true,
+    });
+    return { ok: true, values: parsed.values, positionals: parsed.positionals };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: `error: ${command}: ${message}` };
+  }
+}
+
 export function parseBenchmarkCliOptions(
   args: readonly string[],
   existingBenchmark?: BenchmarkSpec
@@ -130,8 +245,8 @@ export function parseBenchmarkCliOptions(
     if (!rawWarmup || rawWarmup.startsWith("--")) {
       return { ok: false, error: "Missing argument for --warmup <integer>" };
     }
-    const val = parseInt(rawWarmup, 10);
-    if (isNaN(val) || val < 0) {
+    const val = Number(rawWarmup);
+    if (!Number.isInteger(val) || val < 0) {
       return { ok: false, error: `Invalid --warmup "${rawWarmup}": must be an integer >= 0` };
     }
     warmup = val;
@@ -144,8 +259,8 @@ export function parseBenchmarkCliOptions(
     if (!rawSamples || rawSamples.startsWith("--")) {
       return { ok: false, error: "Missing argument for --samples / --min-samples <integer>" };
     }
-    const val = parseInt(rawSamples, 10);
-    if (isNaN(val) || val < 1) {
+    const val = Number(rawSamples);
+    if (!Number.isInteger(val) || val < 1) {
       return { ok: false, error: `Invalid --samples "${rawSamples}": must be an integer >= 1` };
     }
     minSamples = val;
@@ -158,8 +273,8 @@ export function parseBenchmarkCliOptions(
     if (!rawMaxSamples || rawMaxSamples.startsWith("--")) {
       return { ok: false, error: "Missing argument for --max-samples <integer>" };
     }
-    const val = parseInt(rawMaxSamples, 10);
-    if (isNaN(val) || val < minSamples) {
+    const val = Number(rawMaxSamples);
+    if (!Number.isInteger(val) || val < minSamples) {
       return { ok: false, error: `Invalid --max-samples "${rawMaxSamples}": must be an integer >= minSamples (${minSamples})` };
     }
     maxSamples = val;
@@ -359,7 +474,26 @@ export async function runCli(
   const split = splitInlineCommand(argv);
   const args = [...split.bisectArgs];
   const inlineCommand = split.inlineCommand;
-  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+  const cmd = args[0];
+  if (args.length === 0 || cmd === "--help" || cmd === "-h") {
+    process.stdout.write(HELP_TEXT);
+    return 0;
+  }
+
+  if (cmd === "--version" || cmd === "-v") {
+    process.stdout.write("0.1.0\n");
+    return 0;
+  }
+
+  if (cmd && cmd !== "daemon" && cmd !== "worker" && CLI_OPTION_TABLES[cmd]) {
+    const parsed = parseCommandArguments(args);
+    if (!parsed.ok) {
+      process.stderr.write(`${parsed.error}\n`);
+      return 2;
+    }
+  }
+
+  if (args.includes("--help") || args.includes("-h")) {
     process.stdout.write(HELP_TEXT);
     return 0;
   }
@@ -370,7 +504,6 @@ export async function runCli(
   }
 
   const engine = engineOverride ?? new LocalBisectEngine();
-  const cmd = args[0];
 
   if (cmd === "daemon") return runDaemonCommand(args.slice(1), engine);
   if (cmd === "worker") return runWorkerCommand(args.slice(1), engine);
@@ -849,10 +982,20 @@ export async function runCli(
     const outputPath = outIdx >= 0 ? args[outIdx + 1] : undefined;
 
     const budgetIdx = args.indexOf("--budget");
-    const budget = budgetIdx >= 0 && args[budgetIdx + 1] ? parseInt(args[budgetIdx + 1]!, 10) : undefined;
+    const rawBudget = budgetIdx >= 0 ? args[budgetIdx + 1] : undefined;
+    const budget = rawBudget === undefined ? undefined : Number(rawBudget);
+    if (budget !== undefined && (!Number.isInteger(budget) || budget < 1)) {
+      process.stderr.write(`Invalid --budget "${rawBudget}": must be a positive integer\n`);
+      return 2;
+    }
 
     const timeoutIdx = args.indexOf("--timeout");
-    const timeoutMs = timeoutIdx >= 0 && args[timeoutIdx + 1] ? parseInt(args[timeoutIdx + 1]!, 10) : undefined;
+    const rawTimeout = timeoutIdx >= 0 ? args[timeoutIdx + 1] : undefined;
+    const timeoutMs = rawTimeout === undefined ? undefined : Number(rawTimeout);
+    if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
+      process.stderr.write(`Invalid --timeout "${rawTimeout}": must be a positive finite number\n`);
+      return 2;
+    }
 
     const granIdx = args.indexOf("--granularity");
     const rawGran = granIdx >= 0 ? args[granIdx + 1] : undefined;
