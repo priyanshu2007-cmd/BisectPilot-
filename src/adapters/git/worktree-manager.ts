@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { SessionManifestV1, SessionRepositoryMetadata } from "../../contracts/index.js";
-import { resolveCommonGitDir, resolveGitPath, runGit } from "./git-client.js";
+import { ensureBisectPilotExcluded, resolveCommonGitDir, resolveGitPath, runGit } from "./git-client.js";
 
 const OWNERSHIP_MARKER_FILE = "bisectpilot-owned.json";
 
@@ -33,6 +33,7 @@ export async function createSessionWorktree(params: {
 }): Promise<SessionRepositoryMetadata> {
   const resolvedRoot = safeRealpath(params.repoRoot);
   const resolvedCommon = safeRealpath(params.commonGitDir);
+  ensureBisectPilotExcluded(resolvedCommon);
   const resolvedWorktree = path.resolve(params.worktreePath);
 
   if (resolvedWorktree === resolvedRoot) {

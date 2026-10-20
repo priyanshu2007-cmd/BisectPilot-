@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { DoctorCheckResult, DoctorReport } from "../../contracts/index.js";
@@ -364,4 +364,33 @@ export async function getGoodEndpointDiscoveryCandidates(
   // Sort candidates by commit distance ascending (closest ancestor to badSha first)
   candidatesWithDistance.sort((a, b) => a.distance - b.distance);
   return candidatesWithDistance.map((c) => c.sha);
+}
+
+export function ensureBisectPilotExcluded(commonGitDir: string): void {
+  const infoDir = path.join(commonGitDir, "info");
+  const excludePath = path.join(infoDir, "exclude");
+  try {
+    mkdirSync(infoDir, { recursive: true });
+    let content = "";
+    if (existsSync(excludePath)) {
+      content = readFileSync(excludePath, "utf-8");
+    }
+
+    const lines = content.split("\n").map((l) => l.trim());
+    const alreadyExcluded = lines.some(
+      (line) => line === ".bisectpilot/" || line === ".bisectpilot" || line === "/.bisectpilot/" || line === "/.bisectpilot"
+    );
+    if (alreadyExcluded) {
+      return;
+    }
+
+    const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
+    const updated = `${content}${separator}.bisectpilot/\n`;
+
+    const tempPath = `${excludePath}.tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    writeFileSync(tempPath, updated, "utf-8");
+    renameSync(tempPath, excludePath);
+  } catch {
+    // Non-fatal: if permissions prevent exclude modification, proceed with session
+  }
 }

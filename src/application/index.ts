@@ -20,6 +20,7 @@ import type {
 import type { BenchmarkStats } from "../domain/benchmark.js";
 import {
   countCommitsBetween,
+  ensureBisectPilotExcluded,
   getCurrentHead,
   getFirstParentSha,
   getGoodEndpointDiscoveryCandidates,
@@ -314,6 +315,7 @@ export class LocalBisectEngine implements BisectEngine {
 
     try {
       const commonGitDir = await resolveCommonGitDir(planReport.repoRoot);
+      ensureBisectPilotExcluded(commonGitDir);
       const originalHead = await getCurrentHead(planReport.repoRoot);
       const overlayHashes: Record<string, string> =
         config.oracle.mode === "overlay" && config.oracle.overlayFiles

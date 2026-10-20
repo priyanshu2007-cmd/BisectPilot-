@@ -164,4 +164,82 @@ describe("A1 & A2 — Real Git Adapter & Guarded Worktree Lifecycle", () => {
       rmSync(tmpRoot, { recursive: true, force: true });
     }
   });
+
+  it("excludes .bisectpilot/ from target repo status idempotently without touching tracked files or existing exclude rules", async () => {
+    const tmpRoot = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "bp-exclude-")));
+    const repoDir = path.join(tmpRoot, "repo");
+    const sessionDir = path.join(repoDir, ".bisectpilot", "sessions", "sess-ex-1");
+    const worktreeDir = path.join(sessionDir, "worktree");
+
+    mkdirSyncSafe(repoDir);
+    try {
+      await runGit(["init", "-b", "main"], repoDir);
+      await runGit(["config", "user.name", "Test Bot"], repoDir);
+      await runGit(["config", "user.email", "bot@example.com"], repoDir);
+
+      writeFileSync(path.join(repoDir, "app.txt"), "hello\n", "utf-8");
+      await runGit(["add", "app.txt"], repoDir);
+      await runGit(["commit", "-m", "initial"], repoDir);
+      const headSha = await resolveRefToSha(repoDir, "HEAD");
+
+      const commonGitDir = await resolveCommonGitDir(repoDir);
+      const excludeFile = path.join(commonGitDir, "info", "exclude");
+
+      // Seed pre-existing exclude rules
+      mkdirSyncSafe(path.dirname(excludeFile));
+      writeFileSync(excludeFile, "# existing rules\n*.custom-ignore\n", "utf-8");
+
+      // Create session 1 worktree
+      const repoMeta1 = await createSessionWorktree({
+        sessionId: "sess-ex-1",
+        repoRoot: repoDir,
+        commonGitDir,
+        originalHead: headSha,
+        originalWasDirty: false,
+        worktreePath: worktreeDir,
+        initialCommitSha: headSha,
+      });
+
+      // Write session files into .bisectpilot/
+      writeFileSync(path.join(sessionDir, "manifest.json"), "{}", "utf-8");
+
+      // Check git status --porcelain in target repo: .bisectpilot/ must NOT appear
+      const statusRes1 = await runGit(["status", "--porcelain"], repoDir);
+      assert.equal(statusRes1.stdout.trim(), "");
+
+      // Check exclude file content: pre-existing rules preserved, .bisectpilot/ appended
+      const excludeContent1 = readFileSync(excludeFile, "utf-8");
+      assert.ok(excludeContent1.includes("# existing rules\n*.custom-ignore\n"));
+      assert.ok(excludeContent1.includes(".bisectpilot/\n"));
+
+      // Count occurrences of .bisectpilot in exclude file: must be exactly 1
+      const count1 = (excludeContent1.match(/\.bisectpilot/g) || []).length;
+      assert.equal(count1, 1);
+
+      // Create session 2: must be idempotent, not duplicate exclude entry
+      const sessionDir2 = path.join(repoDir, ".bisectpilot", "sessions", "sess-ex-2");
+      const worktreeDir2 = path.join(sessionDir2, "worktree");
+      await createSessionWorktree({
+        sessionId: "sess-ex-2",
+        repoRoot: repoDir,
+        commonGitDir,
+        originalHead: headSha,
+        originalWasDirty: false,
+        worktreePath: worktreeDir2,
+        initialCommitSha: headSha,
+      });
+
+      const excludeContent2 = readFileSync(excludeFile, "utf-8");
+      const count2 = (excludeContent2.match(/\.bisectpilot/g) || []).length;
+      assert.equal(count2, 1, "Creating a second session must not duplicate .bisectpilot entry in exclude file");
+
+      // Untracked .gitignore must not exist if not created by user
+      assert.equal(existsSync(path.join(repoDir, ".gitignore")), false, "Must not create or modify tracked .gitignore");
+
+      // Cleanup worktrees
+      await removeOwnedWorktree({ id: "sess-ex-1", repository: repoMeta1 }, { dryRun: false });
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
 });
