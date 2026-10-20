@@ -185,6 +185,15 @@ Once a version is published to GitHub Packages, installation requires authentica
 
 Follow these steps to run your first regression bisection against a local Git repository. Replace placeholder values (`<PATH_TO_REPO>`, `<GOOD_REF>`, `<BAD_REF>`) with values from your target repository.
 
+For the zero-config path, run the oracle command after `--`:
+
+```bash
+bisectpilot start --good <GOOD_REF> --bad <BAD_REF> --yes -- npm test
+bisectpilot plan --good <GOOD_REF> --bad <BAD_REF> -- npm test
+```
+
+The command and every argument after `--` are passed as-is with shell execution disabled. Use `--timeout <ms>` to override the default inline oracle timeout. A file passed with `--config` still works; when both forms are present, the inline command replaces `oracle.command` from that file.
+
 ### 1. Check prerequisites with `doctor`
 
 Verify that Git `>=2.36.0` is installed and that the target repository is valid:

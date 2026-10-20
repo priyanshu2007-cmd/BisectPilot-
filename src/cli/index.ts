@@ -37,8 +37,8 @@ const HELP_TEXT = `BisectPilot — Local-First Git Regression Bisection Engine
 Usage:
   bisectpilot doctor [repoPath]
   bisectpilot init [--out <config.json>]
-  bisectpilot plan --config <config.json> [--cwd <path>] [--scope <paths>] [--good <ref>] [--bad <ref>] [--terms <old,new>] [--sandbox <docker|podman>] [--sandbox-image <repo@sha256:...>] [--metric <name>] [--threshold <num>] [--relative-regression <val>]
-  bisectpilot start --config <config.json> [--cwd <path>] [--scope <paths>] [--yes] [--background] [--good <ref>] [--bad <ref>] [--terms <old,new>] [--sandbox <docker|podman>] [--sandbox-image <repo@sha256:...>] [--noisy] [--prompt] [--metric <name>] [--threshold <num>] [--relative-regression <val>] [--direction <dir>] [--warmup <n>] [--samples <n>] [--max-samples <n>] [--alpha <n>] [--unit <str>]   (alias: run)
+  bisectpilot plan [--config <config.json>] [--good <ref>] [--bad <ref>] [--timeout <ms>] -- <command> [args...]
+  bisectpilot start [--config <config.json>] [--cwd <path>] [--scope <paths>] [--yes] [--background] [--good <ref>] [--bad <ref>] [--terms <old,new>] [--sandbox <docker|podman>] [--sandbox-image <repo@sha256:...>] [--noisy] [--prompt] [--timeout <ms>] -- <command> [args...]   (alias: run)
   bisectpilot status <sessionId> [--session-root <dir>]
   bisectpilot resume <sessionId> [--session-root <dir>]
   bisectpilot report <sessionId> [--json] [--html] [--github-summary [file]] [--github-issue] [--out <file>] [--verify] [--session-root <dir>]
@@ -48,7 +48,7 @@ Usage:
   bisectpilot worker start|status|stop [options]
   bisectpilot minimize <inputPath> --test <cmd> [--args <args>] [--out <path>] [--budget <n>] [--timeout <ms>] [--granularity <line|char|both>] [--noisy] [--json]
 
-Session Recovery & Invariants:
+ Session Recovery & Invariants:
   status <sessionId>     Inspect session state, lock status, and checkpoint metadata.
                          If state is 'needs_recovery', the session process terminated
                          abruptly (stale lock detected from dead PID). Checkpoint fields:
@@ -255,11 +255,110 @@ export function createStarterConfig(repoRoot = "."): BisectConfigV1 {
   };
 }
 
+export interface InlineCommand {
+  readonly command: string;
+  readonly args: readonly string[];
+}
+
+export function splitInlineCommand(argv: readonly string[]): {
+  readonly bisectArgs: readonly string[];
+  readonly inlineCommand?: InlineCommand;
+} {
+  const command = argv[0];
+  if (command !== "plan" && command !== "start" && command !== "run") {
+    return { bisectArgs: [...argv] };
+  }
+
+  const separatorIndex = argv.indexOf("--");
+  if (separatorIndex < 0) {
+    return { bisectArgs: [...argv] };
+  }
+
+  const tail = argv.slice(separatorIndex + 1);
+  return {
+    bisectArgs: argv.slice(0, separatorIndex),
+    ...(tail.length > 0
+      ? { inlineCommand: { command: tail[0]!, args: tail.slice(1) } }
+      : {}),
+  };
+}
+
+function readOptionValue(args: readonly string[], option: string): string | undefined {
+  const index = args.indexOf(option);
+  const value = index >= 0 ? args[index + 1] : undefined;
+  return value && !value.startsWith("--") ? value : undefined;
+}
+
+function parseInlineTimeout(
+  args: readonly string[],
+  defaultValue: number
+): { ok: true; value: number } | { ok: false; error: string } {
+  const index = args.indexOf("--timeout");
+  if (index < 0) return { ok: true, value: defaultValue };
+  const raw = args[index + 1];
+  if (!raw || raw.startsWith("--")) {
+    return { ok: false, error: "Missing argument for --timeout <ms>" };
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    return { ok: false, error: `Invalid --timeout "${raw}": must be a positive finite number` };
+  }
+  return { ok: true, value };
+}
+
+function applyInlineCommand(
+  config: BisectConfigV1,
+  inlineCommand: InlineCommand,
+  timeoutMs: number
+): BisectConfigV1 {
+  return {
+    ...config,
+    oracle: {
+      ...config.oracle,
+      command: {
+        ...config.oracle.command,
+        command: inlineCommand.command,
+        args: [...inlineCommand.args],
+        timeoutMs,
+      },
+    },
+  };
+}
+
+function createInlineConfig(
+  args: readonly string[],
+  inlineCommand: InlineCommand
+): { ok: true; value: BisectConfigV1 } | { ok: false; error: string } {
+  const goodRef = readOptionValue(args, "--good");
+  const badRef = readOptionValue(args, "--bad");
+  if (!goodRef || !badRef) {
+    return {
+      ok: false,
+      error: "error: --good <ref> and --bad <ref> are required when --config is not provided",
+    };
+  }
+
+  const starter = createStarterConfig(process.cwd());
+  const timeout = parseInlineTimeout(args, starter.oracle.command.timeoutMs);
+  if (!timeout.ok) return timeout;
+
+  return {
+    ok: true,
+    value: applyInlineCommand(
+      { ...starter, goodRef, badRef },
+      inlineCommand,
+      timeout.value
+    ),
+  };
+}
+
 export async function runCli(
   argv: readonly string[],
   engineOverride?: BisectEngine
 ): Promise<number> {
-  const args = [...argv];
+  const split = splitInlineCommand(argv);
+  const args = [...split.bisectArgs];
+  const inlineCommand = split.inlineCommand;
   if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     process.stdout.write(HELP_TEXT);
     return 0;
@@ -298,19 +397,43 @@ export async function runCli(
   if (cmd === "plan") {
     const cfgIdx = args.indexOf("--config");
     const cfgPath = cfgIdx >= 0 ? args[cfgIdx + 1] : undefined;
-    if (!cfgPath) {
+    if (cfgIdx >= 0 && !cfgPath) {
       process.stderr.write("Missing --config <path>\n");
-      return 2;
-    }
-    const validated = loadConfigFromFile(cfgPath);
-    if (!validated.ok) {
-      process.stderr.write(JSON.stringify(validated.issues, null, 2) + "\n");
       return 2;
     }
     const goodIdx = args.indexOf("--good");
     const badIdx = args.indexOf("--bad");
     const termsIdx = args.indexOf("--terms");
-    let activeConfig = validated.value;
+    let activeConfig: BisectConfigV1;
+    if (cfgPath) {
+      const validated = loadConfigFromFile(cfgPath);
+      if (!validated.ok) {
+        process.stderr.write(JSON.stringify(validated.issues, null, 2) + "\n");
+        return 2;
+      }
+      activeConfig = validated.value;
+      if (inlineCommand) {
+        const timeout = parseInlineTimeout(args, activeConfig.oracle.command.timeoutMs);
+        if (!timeout.ok) {
+          process.stderr.write(`${timeout.error}\n`);
+          return 2;
+        }
+        activeConfig = applyInlineCommand(activeConfig, inlineCommand, timeout.value);
+      }
+    } else {
+      if (!inlineCommand) {
+        process.stderr.write(
+          'error: provide an oracle command after "--" (e.g. bisectpilot start --good A --bad B -- npm test) or pass --config <file>\n'
+        );
+        return 2;
+      }
+      const inlineConfig = createInlineConfig(args, inlineCommand);
+      if (!inlineConfig.ok) {
+        process.stderr.write(`${inlineConfig.error}\n`);
+        return 2;
+      }
+      activeConfig = inlineConfig.value;
+    }
     if (goodIdx >= 0 && args[goodIdx + 1]) {
       activeConfig = { ...activeConfig, goodRef: args[goodIdx + 1]! };
     }
@@ -382,19 +505,43 @@ export async function runCli(
     const cfgIdx = args.indexOf("--config");
     const cfgPath = cfgIdx >= 0 ? args[cfgIdx + 1] : undefined;
     const autoYes = args.includes("--yes");
-    if (!cfgPath) {
+    if (cfgIdx >= 0 && !cfgPath) {
       process.stderr.write("Missing --config <path>\n");
-      return 2;
-    }
-    const validated = loadConfigFromFile(cfgPath);
-    if (!validated.ok) {
-      process.stderr.write(JSON.stringify(validated.issues, null, 2) + "\n");
       return 2;
     }
     const goodIdx = args.indexOf("--good");
     const badIdx = args.indexOf("--bad");
     const termsIdx = args.indexOf("--terms");
-    let activeConfig = validated.value;
+    let activeConfig: BisectConfigV1;
+    if (cfgPath) {
+      const validated = loadConfigFromFile(cfgPath);
+      if (!validated.ok) {
+        process.stderr.write(JSON.stringify(validated.issues, null, 2) + "\n");
+        return 2;
+      }
+      activeConfig = validated.value;
+      if (inlineCommand) {
+        const timeout = parseInlineTimeout(args, activeConfig.oracle.command.timeoutMs);
+        if (!timeout.ok) {
+          process.stderr.write(`${timeout.error}\n`);
+          return 2;
+        }
+        activeConfig = applyInlineCommand(activeConfig, inlineCommand, timeout.value);
+      }
+    } else {
+      if (!inlineCommand) {
+        process.stderr.write(
+          'error: provide an oracle command after "--" (e.g. bisectpilot start --good A --bad B -- npm test) or pass --config <file>\n'
+        );
+        return 2;
+      }
+      const inlineConfig = createInlineConfig(args, inlineCommand);
+      if (!inlineConfig.ok) {
+        process.stderr.write(`${inlineConfig.error}\n`);
+        return 2;
+      }
+      activeConfig = inlineConfig.value;
+    }
     if (goodIdx >= 0 && args[goodIdx + 1]) {
       activeConfig = { ...activeConfig, goodRef: args[goodIdx + 1]! };
     }
