@@ -13,3 +13,24 @@ node_modules/
 dist/
 .bisectpilot/
 *.tsbuildinfo
+
+# Local AI-agent tooling (kept locally, not part of BisectPilot)
+/ai-agent-toolkit/
+/.claude/
+/.agents/
+/.agent/
+/.opencode/
+/.kilo/
+/opencode.json
+/.mcp.json
+/AI_BRAIN.md
+/AI_RULES.md
+/SESSION_MEMORY.md
+/SKILL_EXECUTION_REPORT.md
+/ANTIGRAVITY_MASTER_PROMPT.txt
+/GEMINI.md
+/CLAUDE.md
+/AGENTS.md
+/VibeSec-Skill/
+/is-website-vulnerable/
+/tasks/

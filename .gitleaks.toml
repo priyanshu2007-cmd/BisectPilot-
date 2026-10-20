@@ -1,6 +1,2 @@
-[allowlist]
-description = "Allowlist documentation examples and sample fixture patterns in ai-agent-toolkit documentation"
-paths = [
-  '''ai-agent-toolkit/.*''',
-  '''skills .*/.*''',
-]
+[extend]
+useDefault = true

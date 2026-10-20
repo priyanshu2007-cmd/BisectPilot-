@@ -3,8 +3,6 @@
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.expand": false,
   "explorer.fileNesting.patterns": {
-    "AI_BRAIN.md": "AI_RULES.md, SESSION_MEMORY.md, ANTIGRAVITY_MASTER_PROMPT.txt, SPEC.md",
-    "AGENTS.md": "CLAUDE.md, GEMINI.md, .mcp.json, opencode.json",
     "pyproject.toml": "uv.lock, .python-version",
     ".gitignore": ".ignore, .env.example, .nvmrc",
     "package.json": "package-lock.json, tsconfig.json, next-env.d.ts, next.config.*, postcss.config.*, eslint.config.*, Dockerfile, .dockerignore, Makefile, .nvmrc, .env.example"
@@ -16,13 +14,7 @@
     "**/node_modules": true,
     "**/.next": true,
     "**/*.tsbuildinfo": true,
-    ".{agent,agents,claude,kilo,opencode}": true,
-    "ai-agent-toolkit": true,
-    "graft": true,
-    "skills*": true,
-    "tasks": true,
-    "is-website-vulnerable": true,
-    "VibeSec-Skill": true
+    "graft": true
   },
   "search.exclude": {
     "**/dist": true,
@@ -35,11 +27,6 @@
   "files.watcherExclude": {
     "**/.venv/**": true,
     "**/.next/**": true,
-    ".{agent,agents,claude,kilo,opencode}/**": true,
-    "ai-agent-toolkit/**": true,
-    "graft/**": true,
-    "skills*/**": true,
-    "is-website-vulnerable/**": true,
-    "VibeSec-Skill/**": true
+    "graft/**": true
   }
 }

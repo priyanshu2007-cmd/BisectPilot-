@@ -10,14 +10,14 @@
 The existing repository contains:
 - `website/`: Next.js 16 interactive replay specimen (`/explorer`)
 - `src/bisectpilot/__init__.py` & `pyproject.toml`: Zero-dependency Python JSONL trace diff helper
-- `ai-agent-toolkit/` & `AI_BRAIN.md` / `AI_RULES.md`: Token-efficient memory and skill routing system
+- Local agent tooling was present during the original scaffold, but is intentionally kept outside the product repository after the productionization cleanup.
 
 Meanwhile, the BisectPilot v3 master blueprint (`bisectpilot-master-plan-v3.md`) specifies a **TypeScript/Node.js modular monolith** for the core Git regression bisection engine (`src/contracts/`, `src/adapters/`, `src/domain/`, `src/runner/`, `src/application/`).
 
 ## 2. Decision
 
 1. **Preserve Existing Python & Website Assets Without Deletion:**
-   - Keep `src/bisectpilot/__init__.py`, `pyproject.toml`, `tests/test_bisectpilot.py`, `website/`, and `ai-agent-toolkit/` intact.
+   - Keep `src/bisectpilot/__init__.py`, `pyproject.toml`, `tests/test_bisectpilot.py`, and `website/` intact.
    - Expose `npm run test:py` alongside `npm test` so both Python and TypeScript test suites remain runnable.
 2. **Root TypeScript/Node.js ESM Scaffold:**
    - Use strict TypeScript (`NodeNext`, `strict: true`, `noUncheckedIndexedAccess: true`) compiling `src/**/*.ts` and `tests/**/*.ts` into `dist/` (gitignored).

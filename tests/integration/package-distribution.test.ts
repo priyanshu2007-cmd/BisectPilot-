@@ -58,8 +58,6 @@ test("Feature B — Production-Ready npm Package Distribution", async (t) => {
     // Verify development files, website, and toolkits are strictly excluded
     const disallowedPrefixes = [
       "package/website",
-      "package/ai-agent-toolkit",
-      "package/skills",
       "package/tests",
       "package/.github",
       "package/src/",
