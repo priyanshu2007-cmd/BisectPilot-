@@ -12,6 +12,7 @@ Primary Goal: Provide a token-efficient, skill-routed workspace for BisectPilot 
 ## 2. Current Tech Stack
 
 Agent & Memory Architecture:
+
 - Antigravity AI Brain (`AI_RULES.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `ANTIGRAVITY_MASTER_PROMPT.txt`)
 - AI Agent Toolkit (`ai-agent-toolkit/`) with 9 core workflow skills + 255 indexed third-party skills across 67 cataloged repositories
 - Graft repository graph (`graft/`)
@@ -54,6 +55,7 @@ Do NOT store entire source files in this memory.
 ## 5. Existing Features
 
 ### Completed
+
 - Antigravity AI Brain memory system (`AI_RULES.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `ANTIGRAVITY_MASTER_PROMPT.txt`) deployed at project root.
 - `ai-agent-toolkit` deployed at project root (`./ai-agent-toolkit`).
 - Agent entry instructions configured in `AGENTS.md` and `CLAUDE.md`.
@@ -69,12 +71,14 @@ Do NOT store entire source files in this memory.
 - Step 13 distributed bisection fleet & multi-worker coordination: `JobType` extensions, capability matching, lease fencing tokens (`fencingToken`), parallel noisy-oracle sampling (`FleetCoordinator.scheduleNoisyOracleBatch`), parallel benchmark sampling, and fleet observability metrics.
 - Step 14 automated session recovery: versioned checksummed checkpoints (`checkpoint.json` / `checkpoint.backup.json`), tri-level fallback recovery (`primary` -> `backup` -> `reconstructed_from_wal`), fast resume via cached classifications, daemon startup dead-process recovery (`needs_recovery`), Mann-Whitney U rank-sum statistics (`mannWhitneyUTest`), and Grafana dashboard template.
 - Release Verification & Hardening Milestone: fresh-clone end-to-end bisection proof (`tests/integration/fresh-clone-e2e.test.ts`), `fsyncSync` checkpoint durability on POSIX, subprocess SIGKILL crash tests, unsupported schema (`schemaVersion: 99`) and wrong-repo rejection tests, multi-machine mTLS runbook (`docs/multimachine-mtls-setup.md`), and recovery CLI help documentation.
-- GitHub CI/CD & Master-Only Integration Milestone: branch consolidation onto `master`, remediation of trailing-space `skills ` tree entry with full backup, cross-platform GitHub Actions matrix (`ubuntu-latest`, `macos-latest`, `windows-latest` on Node 20 & 22), package validation job with consumer installation, and gated GitHub Packages publication workflow (`.github/workflows/publish.yml`) scoped to `@priyanshu2007-cmd/bisectpilot`.
+- GitHub CI/CD & Master-Only Integration Milestone: branch consolidation onto `master`, cross-platform GitHub Actions matrix (`ubuntu-latest`, `macos-latest`, `windows-latest` on Node 20 & 22), package validation job with consumer installation, and gated GitHub Packages publication workflow (`.github/workflows/publish.yml`) scoped to `@priyanshu2007-cmd/bisectpilot`.
 
 ### In Progress / Blocked
+
 - Physical multi-machine deployment across separate hosts (loopback mTLS verified 10/10).
 
 ### Planned (Post-Release P2)
+
 - Optional OpenTelemetry Collector OTLP exporter bridge.
 - Website Explorer workspace-scope display indicator.
 - Deeper native Windows process-tree (`taskkill.exe`) and daemon restart verification.
@@ -83,7 +87,7 @@ Do NOT store entire source files in this memory.
 ## 6. Important APIs / Routes
 
 | Method | Route / Command | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | CLI | `ai-agent-toolkit/scripts/skill-search.sh "<query>"` | Rank and locate top 1–3 relevant skills |
 | CLI | `ai-agent-toolkit/scripts/verify-installation.sh` | Verify toolkit structure, manifests, and agent registrations |
 | CLI | `npx ctx7@latest library <name> "<query>"` | Resolve library ID for Context7 documentation lookup |
@@ -110,8 +114,8 @@ No database configured yet. Update this section when database schemas/models are
 
 ## 10. Current Known Issues & Blockers
 
-- Windows Native CI: Git tree entry with trailing space `skills ` causes `actions/checkout@v4` on native Windows NTFS runners to fail with `Invalid argument`. Removal from git index required before Windows CI can execute.
-- Linux Rootless Podman CI: Standard GitHub Actions Ubuntu runner lacks user namespace subuid/subgid mapping for rootless container execution.
+- Windows Native CI: current tracked-path audit found zero paths ending in spaces, and the recorded Windows matrix run completed. Keep the audit in release verification to catch regressions.
+- Linux Rootless Podman CI: real container isolation is environment-dependent; this macOS host has no usable rootless runtime, while the CI workflow attempts the Podman check when the runner provides one and reports an explicit limitation otherwise.
 - Physical Multi-Machine mTLS: Automated on loopback (10/10 tests pass); deployment across separate physical hosts is unverified due to lack of secondary physical machine in local environment. Runbook provided in `docs/multimachine-mtls-setup.md`.
 - Chrome remote debugging (`chrome://inspect/#remote-debugging`) requires manual opt-in in Chrome if interactive `browser-harness` automation is needed.
 - Playwright Python package is not installed in the current environment; browser smoke testing is pending. HTTP smoke checks pass.
@@ -130,13 +134,15 @@ No database configured yet. Update this section when database schemas/models are
 - 2026-10-20 — Added Step 13 distributed bisection fleet & multi-worker coordination: capability matching, monotonic fencing tokens, parallel noisy-oracle sampling (`FleetCoordinator`), parallel benchmark sampling, and worker capacity gauges.
 - 2026-10-20 — Added Step 14 automated session recovery: versioned checksummed checkpoints, 3-tier fallback (`primary` -> `backup` -> `reconstructed_from_wal`), fast resume, daemon crash recovery (`needs_recovery`), Mann-Whitney U rank-sum test, and Grafana dashboard template.
 - 2026-10-20 — Executed Release Verification & Hardening Milestone: fresh-clone E2E bisection proof (`fresh-clone-e2e.test.ts`), `fsyncSync` checkpoint durability on POSIX in `src/session/checkpoint.ts`, subprocess SIGKILL crash tests, unsupported schema (`schemaVersion: 99`) and wrong-repo rejection tests in `tests/integration/session-resume-recovery.test.ts`, multi-machine mTLS runbook in `docs/multimachine-mtls-setup.md`, and updated CLI help documentation. Verified 229 tests (228 pass, 1 skip), 4/4 Python tests, 3/3 package-distribution tests, 8/8 website pages. Pushed commit `82b9497`.
+- 2026-10-20 — Refreshed user-facing documentation and task Markdown: added end-to-end CLI, website, testing, security, and debugging workflows to `README.md`; expanded `website/README.md`; corrected recovery, durability, and platform-limit statements in architecture, safety, handoff, and memory docs; formatted `tasks/todo.md`; and regenerated `uv.lock` from the dependency-free `pyproject.toml`.
+- 2026-10-20 — Updated GitHub repository About description via GitHub API and restructured root `README.md` with verified 5-line product summary, installation options (source vs. gated GitHub Packages), first-run Quick Start, CLI reference, oracle/monorepo/performance guides, safety model, recovery workflows, and accurate Python `bisectpilot:main` invocation (`1ee2e55`).
 
 ## 12. Important File Map
 
 Use this to decide what files should be opened.
 
 | Topic | Files |
-|---|---|
+| --- | --- |
 | Memory & Rules | `AI_RULES.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `ANTIGRAVITY_MASTER_PROMPT.txt` |
 | Agent Instructions | `AGENTS.md`, `CLAUDE.md` |
 | Editor Config | `.vscode/settings.json` |
@@ -154,6 +160,7 @@ Use this to decide what files should be opened.
 
 Current task:
 Release Verification Milestone & Cross-Platform Hardening:
+
 1. Fresh-clone end-to-end bisection proof: isolated temporary Git repository, deterministic planted regression (`c3`), JSON/MD/HTML report consistency, HTML XSS escaping, oracle timeout safety, skip budget enforcement (`tests/integration/fresh-clone-e2e.test.ts`).
 2. Durable checkpoint writes: `fsyncSync` of temp checkpoint files and directory synchronization on POSIX in `src/session/checkpoint.ts`.
 3. Process-kill (SIGKILL) crash tests: subprocess termination at persistence write points and clean resumption in `tests/integration/session-resume-recovery.test.ts`.
@@ -174,6 +181,7 @@ Release Verification Milestone & Cross-Platform Hardening:
    - Enforced strict master-only branch policy with full offline bundle backup.
 
 Relevant files:
+
 - `.github/workflows/ci.yml`
 - `.github/workflows/codeql.yml`
 - `.github/workflows/secret-scanning.yml`
@@ -189,6 +197,7 @@ Do not open unrelated files.
 ## 14. Last Session Summary
 
 CI/CD and Security Hardening milestone completed:
+
 - Diagnosed and fixed cross-platform test discovery without shell globs.
 - Resolved all platform-specific test bugs across Linux, macOS, and native Windows.
 - GitHub Actions CI matrix (6/6 jobs) + Package Validation (7/7 jobs) passed 100% green on `master` (Run ID: `39463385230`).
@@ -197,10 +206,9 @@ CI/CD and Security Hardening milestone completed:
 - Verified npm package build, isolated consumer installation, CLI execution, and SPDX SBOM generation.
 - Master branch synchronized cleanly with remote; no secondary branches exist.
 
-
 ---
 
-# MEMORY POLICY
+## Memory Policy
 
 1. Read `AI_RULES.md` and this file first.
 2. Do not recursively inspect the whole repository by default.

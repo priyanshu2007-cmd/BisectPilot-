@@ -9,7 +9,7 @@ It prevents `AI_BRAIN.md` from becoming bloated.
 Complete Release Verification Milestone & Cross-Platform Hardening:
 - Verify fresh-clone isolated end-to-end bisection (`tests/integration/fresh-clone-e2e.test.ts`).
 - Execute and resolve P1 requirements (durability `fsyncSync`, process-kill SIGKILL crash tests, unsupported schema & wrong-repo rejection, CLI recovery documentation, multi-machine mTLS runbook).
-- Audit cross-platform status and declare verified blockers (Windows `skills ` trailing space, Linux rootless Podman CI).
+- Audit cross-platform status and declare verified limitations (local rootless container runtime unavailable; physical multi-machine mTLS remains unverified).
 - Provide evidence-based status: `NOT_READY_BLOCKERS_REMAIN`.
 
 ## Release Verification Working Context
@@ -87,4 +87,11 @@ Latest Verification (Release Hardening Milestone):
 - `npm pack --dry-run`: 144 files, 211.8 kB compressed, 1.1 MB unpacked.
 - `npm --prefix website run test`: 8/8 static pages rendered, 0 lint errors, Next.js build clean.
 - `git diff --check`: 0 formatting or whitespace issues.
-- Decision: `NOT_READY_BLOCKERS_REMAIN` (Windows checkout blocked by `skills ` trailing space; Linux rootless Podman CI unconfigured; multi-machine mTLS physical hardware unverified).
+- Decision: `NOT_READY_BLOCKERS_REMAIN` for physical multi-machine mTLS and any host without a usable rootless container runtime. The tracked-path audit found no trailing-space paths and the recorded Windows matrix completed.
+
+## Current Documentation Refresh
+
+- Root `README.md` now explains the three project surfaces, CLI setup and recovery, daemon/worker usage, website usage, testing, security checks, and debugging steps.
+- `website/README.md` now includes report-import verification and browser-debugging guidance.
+- `docs/architecture.md`, `docs/safety-model.md`, and `docs/handoff.md` now agree on recovery commands, checkpoint `fsyncSync` behavior, and current platform limitations.
+- `tasks/todo.md` now has blank lines around headings and task lists; `uv.lock` was regenerated from the current dependency-free `pyproject.toml`.

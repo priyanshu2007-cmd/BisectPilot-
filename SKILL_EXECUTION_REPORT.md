@@ -14,7 +14,7 @@
 All 72 requested skills were identified, located, verified against actual on-disk instruction files (`SKILL.md`), and evaluated against the BisectPilot codebase following the mandatory `/ponytail` workflow and `/token-efficiency` guidelines.
 
 | Status Category | Count | Percentage | Definition |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **PASS** | 57 | 79.2% | Skill instructions read, applicable actions performed, and verified with real commands. |
 | **PARTIAL** | 1 | 1.4% | Partially executed (e.g. static QA verified, but browser E2E blocked). |
 | **BLOCKED** | 7 | 9.7% | Blocked by missing runtime toolchain or credentials (Playwright/Chrome CDP/Strix). |
@@ -28,7 +28,7 @@ All 72 requested skills were identified, located, verified against actual on-dis
 ## 2. Complete 72-Skill Execution Inventory
 
 | # | Requested Command / Skill | Canonical File Path | Invocation Method | Status | Actions Performed & Verification Evidence |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 1 | `/ponytail` | `ai-agent-toolkit/repositories/skills/ponytail/skills/ponytail/SKILL.md` | Slash / Prompt Rule | **PASS** | Enforced senior developer ladder: YAGNI, stdlib before custom code, 0 runtime dependencies in engine. |
 | 2 | `/ponytail-review` | `ai-agent-toolkit/repositories/skills/ponytail/skills/ponytail-review/SKILL.md` | Slash Command | **PASS** | Reviewed working tree diff: identified duplicate signal handler boilerplate in CLI and tracked tsbuildinfo cache. |
 | 3 | `/ponytail-audit` | `ai-agent-toolkit/repositories/skills/ponytail/skills/ponytail-audit/SKILL.md` | Slash Command | **PASS** | Whole-repo complexity audit: identified 175-line FakeEngine in contracts file and 4 redundant barrel re-export files. |
@@ -53,7 +53,7 @@ All 72 requested skills were identified, located, verified against actual on-dis
 | 22 | `/migration` | `ai-agent-toolkit/repositories/skills/caveman/skills/migration/SKILL.md` | Migration Workflow | **NOT APPLICABLE** | No active database schema or framework version migration in progress. |
 | 23 | `/test-driven-development` | `.agents/skills/test-driven-development/SKILL.md` | TDD Lifecycle | **PASS** | Evaluated test suites written against frozen contracts prior to full engine assembly. |
 | 24 | `/testing-and-verification` | `.agents/skills/testing-and-verification/SKILL.md` | Verification Runner | **PASS** | Executed `npm test` (17/17 pass) and `npm --prefix website run test` (clean build). |
-| 25 | `/verification-before-completion`| `.agents/skills/verification-before-completion/SKILL.md` | Evidence Guard | **PASS** | Confirmed all test suites and compiler passes succeeded before asserting completion. |
+| 25 | `/verification-before-completion` | `.agents/skills/verification-before-completion/SKILL.md` | Evidence Guard | **PASS** | Confirmed all test suites and compiler passes succeeded before asserting completion. |
 | 26 | `/code-review-and-quality` | `.agents/skills/code-review-and-quality/SKILL.md` | Multi-axis Review | **PASS** | Audited type safety, ESLint rules, error handling, and Git worktree isolation. |
 | 27 | `/requesting-code-review` | `ai-agent-toolkit/repositories/skills/superpowers/skills/requesting-code-review/SKILL.md` | Review Protocol | **PASS** | Prepared structured review context, file diffs, test evidence, and known trade-offs. |
 | 28 | `/receiving-code-review` | `ai-agent-toolkit/repositories/skills/superpowers/skills/receiving-code-review/SKILL.md` | Review Ingestion | **PASS** | Ingested ponytail review findings: tracked cache artifacts and helper consolidation. |
@@ -67,7 +67,7 @@ All 72 requested skills were identified, located, verified against actual on-dis
 | 36 | `/minimalist-ui` | `ai-agent-toolkit/repositories/skills/taste-skill/skills/minimalist-skill/SKILL.md` | UI Audit | **PASS** | Verified editorial-style typographic contrast, muted dark tones, and absence of generic drop shadows. |
 | 37 | `/image-to-code` | `ai-agent-toolkit/repositories/skills/taste-skill/skills/image-to-code-skill/SKILL.md` | Vision Translation | **NOT APPLICABLE** | Web UI is built from semantic specification and code design tokens, not raster image mockups. |
 | 38 | `/vercel-react-best-practices` | `.agents/skills/vercel-react-best-practices/SKILL.md` | Performance Audit | **PASS** | Audited Next.js static rendering, client component boundaries (`"use client"`), and zero waterflow fetches. |
-| 39 | `/vercel-composition-patterns` | `.agents/skills/vercel-composition-patterns/SKILL.md` | Architecture Audit| **PASS** | Verified clean component separation: `PilotConsole` sub-views (Telemetry, Notes, Signal, Trace). |
+| 39 | `/vercel-composition-patterns` | `.agents/skills/vercel-composition-patterns/SKILL.md` | Architecture Audit | **PASS** | Verified clean component separation: `PilotConsole` sub-views (Telemetry, Notes, Signal, Trace). |
 | 40 | `/web-design-guidelines` | `.agents/skills/web-design-guidelines/SKILL.md` | W3C / UX Audit | **PASS** | Verified semantic HTML (`<main>`, `<header>`, `<footer>`), keyboard navigation, and ARIA labels. |
 | 41 | `/browser-automation` | `.agents/skills/browser-automation/SKILL.md` | Browser Runner | **BLOCKED** | Python `playwright` package is not installed; Chrome remote debugging was not active. |
 | 42 | `/browser-harness` | `.agents/skills/browser-harness/SKILL.md` | CDP Controller | **BLOCKED** | Chrome instance with `--remote-debugging-port` not found in local environment. |
@@ -83,10 +83,10 @@ All 72 requested skills were identified, located, verified against actual on-dis
 | 52 | `/api-security` | `.agents/skills/api-security/SKILL.md` | API Audit | **PASS** | Checked website static endpoints (`robots.txt`, `sitemap.xml`) and CLI argument validators. |
 | 53 | `/dependency-scanning` | `.agents/skills/dependency-scanning/SKILL.md` | Dependency Audit | **PASS** | Root has 0 dependencies (clean). Website `npm audit` flagged 5 transitive dev-deps in `braces`. |
 | 54 | `/secrets-management` | `.agents/skills/secrets-management/SKILL.md` | Secret Hygiene | **PASS** | Confirmed `.gitignore` excludes `.env*`, `.venv/`, and `.bisectpilot/`; regex strips secret env vars. |
-| 55 | `/owasp-top-10-web` | `.agents/skills/owasp-top-10-web/SKILL.md` | Web Vulnerabilities| **PASS** | Audited website against OWASP Top 10: static SSR, no SQL, security response headers in place. |
+| 55 | `/owasp-top-10-web` | `.agents/skills/owasp-top-10-web/SKILL.md` | Web Vulnerabilities | **PASS** | Audited website against OWASP Top 10: static SSR, no SQL, security response headers in place. |
 | 56 | `/VibeSec-Skill` | `.agents/skills/VibeSec-Skill/SKILL.md` | Web Sec Review | **PASS** | Verified client-side file upload limits, sanitized JSON parsing, and isolated client iframe boundaries. |
 | 57 | `/api-security-testing` | `.agents/skills/api-security-testing/SKILL.md` | Active Pentest | **NOT APPLICABLE** | No live API servers or GraphQL endpoints exposed by the static website or CLI tool. |
-| 58 | `/ci-security-scanning-with-strix`| `.agents/skills/ci-security-scanning-with-strix/SKILL.md`| Strix Pentest | **BLOCKED** | Strix automated security agent requires cloud credentials and external target authorization. |
+| 58 | `/ci-security-scanning-with-strix` | `.agents/skills/ci-security-scanning-with-strix/SKILL.md` | Strix Pentest | **BLOCKED** | Strix automated security agent requires cloud credentials and external target authorization. |
 | 59 | `/research-and-documentation` | `.agents/skills/research-and-documentation/SKILL.md` | Docs Review | **PASS** | Audited `docs/architecture.md`, `docs/safety-model.md`, and `docs/handoff.md` for technical accuracy. |
 | 60 | `/find-docs` | `.agents/skills/find-docs/SKILL.md` | Doc Search | **PASS** | Verified Node.js test runner documentation and Next.js 16 App Router configuration standards. |
 | 61 | `/context7-cli` | `ai-agent-toolkit/repositories/tools/context7/skills/context7-cli/SKILL.md` | Documentation CLI | **PASS** | Verified `npx ctx7@latest` resolution for library documentation lookups. |
@@ -95,33 +95,37 @@ All 72 requested skills were identified, located, verified against actual on-dis
 | 64 | `/mcp-builder` | `.agents/skills/mcp-builder/SKILL.md` | MCP Authoring | **NOT APPLICABLE** | Existing MCP servers are integrated; authoring new MCP servers was not requested. |
 | 65 | `/reverse-engineer-anything` | `.agents/skills/reverse-engineer-anything/SKILL.md` | Binary / REA | **PASS** | Inspected REA integration config and validated native git binary discovery across systems. |
 | 66 | `/graft` | `.agents/skills/graft/SKILL.md` | Code Graph | **PASS** | Verified Graft configuration and local index card cache at `graft/`. |
-| 67 | `/documentation-and-adrs` | `.agents/skills/documentation-and-adrs/SKILL.md` | Architecture Records| **PASS** | Verified ADR 0001 (`docs/decisions/0001-phase-g0-contracts-and-ts-scaffold.md`). |
-| 68 | `/dispatching-parallel-agents` | `ai-agent-toolkit/repositories/skills/superpowers/skills/dispatching-parallel-agents/SKILL.md` | Agent Orchestration| **PASS** | Validated contract boundaries permitting parallel development between engine and website. |
+| 67 | `/documentation-and-adrs` | `.agents/skills/documentation-and-adrs/SKILL.md` | Architecture Records | **PASS** | Verified ADR 0001 (`docs/decisions/0001-phase-g0-contracts-and-ts-scaffold.md`). |
+| 68 | `/dispatching-parallel-agents` | `ai-agent-toolkit/repositories/skills/superpowers/skills/dispatching-parallel-agents/SKILL.md` | Agent Orchestration | **PASS** | Validated contract boundaries permitting parallel development between engine and website. |
 | 69 | `/subagent-driven-development` | `ai-agent-toolkit/repositories/skills/superpowers/skills/subagent-driven-development/SKILL.md` | Subagent Pattern | **PASS** | Inspected subagent boundary rules: isolated work, narrow task prompts, zero context leaks. |
 | 70 | `/using-git-worktrees` | `ai-agent-toolkit/repositories/skills/superpowers/skills/using-git-worktrees/SKILL.md` | Worktree Safety | **PASS** | Verified Git worktree lifecycle: creation, branch detachment, clean removal, and dirty-tree safety. |
 | 71 | `/executing-plans` | `ai-agent-toolkit/repositories/skills/superpowers/skills/executing-plans/SKILL.md` | Execution Tracking | **PASS** | Tracked progress across `tasks/todo.md` and verified phase completion status. |
-| 72 | `/finishing-a-development-branch`| `ai-agent-toolkit/repositories/skills/superpowers/skills/finishing-a-development-branch/SKILL.md`| Git Finishing | **PASS** | Audited `agent-a/engine` branch against `origin/master`, checked status, and documented merge readiness. |
+| 72 | `/finishing-a-development-branch` | `ai-agent-toolkit/repositories/skills/superpowers/skills/finishing-a-development-branch/SKILL.md` | Git Finishing | **PASS** | Audited `agent-a/engine` branch against `origin/master`, checked status, and documented merge readiness. |
 
 ---
 
 ## 3. Detailed Verification Results
 
 ### A. TypeScript Engine (`src/`)
+
 * **Compilation:** `tsc -p tsconfig.json` → **Exit code 0** (clean, zero errors).
 * **Test Suites:** `node --test dist/tests/unit/*.test.js dist/tests/integration/*.test.js dist/tests/safety/*.test.js`
   * Total: **85/85 passed across 11 suites** (unit, integration, and safety).
   * Covers: frozen contracts, git client, worktrees, auto-good discovery, process runner & safe termination, ledger hash chaining & redaction, CLI parsing & `--terms`, Bayesian noisy oracle SPRT, prompt oracle, toolchain wrapper, standalone repro bundles, report replay adapter, and end-to-end engine bisect.
 
 ### B. Python Diff & Trace CLI (`src/bisectpilot/`)
+
 * **Test Suite:** `PYTHONPATH=src python3 -m unittest discover -s tests -p "*.py"` → **Exit code 0**.
 * **Passed:** 4/4 tests (`test_bisectpilot.py`: help, diff matching, diff changes, trace format).
 
 ### C. Next.js 16 Website (`website/`)
+
 * **Typecheck:** `tsc --noEmit` → **Exit code 0** (0 type errors).
 * **Linter:** `eslint .` → **Exit code 0** (0 warnings or errors).
 * **Production Build:** `next build` → **Exit code 0** (all 8 static routes generated successfully: `/`, `/_not-found`, `/docs`, `/explorer`, `/icon.svg`, `/robots.txt`, `/sitemap.xml`).
 
 ### D. Security & Dependency Scan
+
 * **Root Engine:** `npm audit --omit=dev` → **0 vulnerabilities** (zero runtime packages).
 * **Website:** Pinned `braces` to `^3.0.3` via package override in `website/package.json`.
 
@@ -150,4 +154,3 @@ All 72 requested skills were identified, located, verified against actual on-dis
    * *Resolution:* Resolved by pinning `braces` to `^3.0.3` in `website/package.json` overrides.
 3. **Branch Finishing & Merge:**
    * Branch `agent-a/engine` contains the verified engine implementation, test suites, and CI workflows. Ready to be merged to `master` upon user approval.
-
