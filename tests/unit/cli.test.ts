@@ -153,4 +153,71 @@ describe("CLI — Dispatch & Command Behavior", () => {
     assert.match(result.stdout, /Outcome: candidate_confirmed/);
     assert.match(result.stdout, /Candidate: 44444444/);
   });
+
+  it("rejects unknown options for subcommands with exit code 2", async () => {
+    for (const [subcmd, flag] of [
+      [["doctor", "--unknown-flag"], "doctor"],
+      [["status", "bp-1", "--unknown-flag"], "status"],
+      [["report", "bp-1", "--unknown-flag"], "report"],
+      [["cleanup", "bp-1", "--unknown-flag"], "cleanup"],
+      [["list", "--unknown-flag"], "list"],
+      [["daemon", "start", "--unknown-flag"], "daemon start"],
+      [["worker", "status", "--unknown-flag"], "worker status"],
+    ] as const) {
+      const result = await captureCliOutput(() => runCli(subcmd as readonly string[]));
+      assert.equal(result.code, 2, `Expected exit 2 for ${subcmd.join(" ")}`);
+      assert.match(result.stderr, new RegExp(`${flag}.*unknown-flag`), `Expected error mentioning ${flag}`);
+    }
+  });
+
+  it("validates numeric options strictly across subcommands", async () => {
+    // start with invalid timeout
+    const resTimeout = await captureCliOutput(() =>
+      runCli(["start", "--good", "a", "--bad", "b", "--timeout=-5", "--", "npm", "test"])
+    );
+    assert.equal(resTimeout.code, 2);
+    assert.match(resTimeout.stderr, /Invalid --timeout/);
+
+    // start with invalid threshold
+    const resThreshold = await captureCliOutput(() =>
+      runCli(["start", "--good", "a", "--bad", "b", "--metric", "latency", "--threshold", "invalid", "--", "npm", "test"])
+    );
+    assert.equal(resThreshold.code, 2);
+    assert.match(resThreshold.stderr, /Invalid --threshold/);
+
+    // start with invalid alpha
+    const resAlpha = await captureCliOutput(() =>
+      runCli(["start", "--good", "a", "--bad", "b", "--metric", "latency", "--alpha", "0.99", "--", "npm", "test"])
+    );
+    assert.equal(resAlpha.code, 2);
+    assert.match(resAlpha.stderr, /Invalid --alpha/);
+
+    // start with invalid warmup
+    const resWarmup = await captureCliOutput(() =>
+      runCli(["start", "--good", "a", "--bad", "b", "--metric", "latency", "--warmup=-1", "--", "npm", "test"])
+    );
+    assert.equal(resWarmup.code, 2);
+    assert.match(resWarmup.stderr, /Invalid --warmup/);
+
+    // start with invalid samples
+    const resSamples = await captureCliOutput(() =>
+      runCli(["start", "--good", "a", "--bad", "b", "--metric", "latency", "--samples", "0", "--", "npm", "test"])
+    );
+    assert.equal(resSamples.code, 2);
+    assert.match(resSamples.stderr, /Invalid --samples/);
+
+    // minimize with invalid budget
+    const resBudget = await captureCliOutput(() =>
+      runCli(["minimize", "input.txt", "--test", "node", "--budget=-10"])
+    );
+    assert.equal(resBudget.code, 2);
+    assert.match(resBudget.stderr, /Invalid --budget/);
+
+    // daemon start with invalid port
+    const resPort = await captureCliOutput(() =>
+      runCli(["daemon", "start", "--port", "999999"])
+    );
+    assert.equal(resPort.code, 2);
+    assert.match(resPort.stderr, /port.*must be between 1 and 65535/i);
+  });
 });

@@ -113,6 +113,45 @@ const COMMON_OPTIONS = {
   timeout: { type: "string" },
 } as const;
 
+const DAEMON_COMMON_OPTIONS = {
+  ...GLOBAL_OPTIONS,
+  "state-dir": { type: "string" },
+} as const;
+
+const DAEMON_SERVICE_OPTIONS = {
+  ...DAEMON_COMMON_OPTIONS,
+  foreground: { type: "boolean" },
+  host: { type: "string" },
+  port: { type: "string" },
+  "token-file": { type: "string" },
+  "lease-ms": { type: "string" },
+  "heartbeat-ms": { type: "string" },
+  "tls-cert": { type: "string" },
+  "tls-key": { type: "string" },
+  "tls-ca": { type: "string" },
+  "tls-require-client-cert": { type: "boolean" },
+  "tls-allowed-identity": { type: "string", multiple: true },
+  "tls-revoked-fingerprint": { type: "string", multiple: true },
+  recover: { type: "boolean" },
+} as const;
+
+const WORKER_SERVICE_OPTIONS = {
+  ...GLOBAL_OPTIONS,
+  "state-dir": { type: "string" },
+  foreground: { type: "boolean" },
+  server: { type: "string" },
+  "token-file": { type: "string" },
+  repo: { type: "string", multiple: true },
+  "poll-ms": { type: "string" },
+  "heartbeat-ms": { type: "string" },
+  "tls-cert": { type: "string" },
+  "tls-key": { type: "string" },
+  "tls-ca": { type: "string" },
+  "tls-servername": { type: "string" },
+  "worker-id": { type: "string" },
+  recover: { type: "boolean" },
+} as const;
+
 export const CLI_OPTION_TABLES: Readonly<Record<string, CliOptionTable>> = {
   doctor: GLOBAL_OPTIONS,
   init: { ...GLOBAL_OPTIONS, out: { type: "string" }, force: { type: "boolean" } },
@@ -157,6 +196,30 @@ export const CLI_OPTION_TABLES: Readonly<Record<string, CliOptionTable>> = {
     force: { type: "boolean" },
     json: { type: "boolean" },
   },
+  daemon: DAEMON_COMMON_OPTIONS,
+  "daemon:start": DAEMON_SERVICE_OPTIONS,
+  "daemon:run": DAEMON_SERVICE_OPTIONS,
+  "daemon:status": DAEMON_COMMON_OPTIONS,
+  "daemon:stop": DAEMON_COMMON_OPTIONS,
+  "daemon:enqueue": {
+    ...DAEMON_COMMON_OPTIONS,
+    config: { type: "string" },
+    yes: { type: "boolean" },
+    "repository-key": { type: "string" },
+  },
+  "daemon:cancel": { ...DAEMON_COMMON_OPTIONS, reason: { type: "string" } },
+  "daemon:recover": { ...DAEMON_COMMON_OPTIONS, reason: { type: "string" } },
+  "daemon:revoke": {
+    ...DAEMON_COMMON_OPTIONS,
+    fingerprint: { type: "string" },
+    "worker-id": { type: "string" },
+    reason: { type: "string" },
+  },
+  worker: { ...GLOBAL_OPTIONS, "state-dir": { type: "string" } },
+  "worker:start": WORKER_SERVICE_OPTIONS,
+  "worker:run": WORKER_SERVICE_OPTIONS,
+  "worker:status": { ...GLOBAL_OPTIONS, "state-dir": { type: "string" } },
+  "worker:stop": { ...GLOBAL_OPTIONS, "state-dir": { type: "string" } },
 };
 
 function protectMinimizerArgs(command: string, args: readonly string[]): string[] {
@@ -176,19 +239,36 @@ function protectMinimizerArgs(command: string, args: readonly string[]): string[
 }
 
 export function parseCommandArguments(argv: readonly string[]):
-  | { readonly ok: true; readonly values: Readonly<Record<string, unknown>>; readonly positionals: readonly string[] }
+  | { readonly ok: true; readonly command?: string; readonly values: Readonly<Record<string, unknown>>; readonly positionals: readonly string[] }
   | { readonly ok: false; readonly error: string } {
-  const command = argv[0] === "run" ? "start" : argv[0];
-  const options = command ? CLI_OPTION_TABLES[command] : undefined;
-  if (!options) return { ok: true, values: {}, positionals: argv.slice(1) };
+  let command = argv[0] === "run" ? "start" : argv[0] ?? "";
+  let argsToParse = argv.slice(1);
+  let optionsTable: CliOptionTable | undefined = CLI_OPTION_TABLES[command];
+
+  if (command === "daemon" || command === "worker") {
+    const subAction = argv[1];
+    if (subAction && !subAction.startsWith("-")) {
+      const subKey = `${command}:${subAction}`;
+      if (CLI_OPTION_TABLES[subKey]) {
+        command = `${command} ${subAction}`;
+        optionsTable = CLI_OPTION_TABLES[subKey];
+        argsToParse = argv.slice(2);
+      }
+    }
+  }
+
+  if (!optionsTable) {
+    return { ok: true, command, values: {}, positionals: argv.slice(1) };
+  }
+
   try {
     const parsed = parseArgs({
-      args: protectMinimizerArgs(command ?? "", argv.slice(1)),
-      options,
+      args: protectMinimizerArgs(command, argsToParse),
+      options: optionsTable,
       strict: true,
       allowPositionals: true,
     });
-    return { ok: true, values: parsed.values, positionals: parsed.positionals };
+    return { ok: true, command, values: parsed.values, positionals: parsed.positionals };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, error: `error: ${command}: ${message}` };
@@ -196,21 +276,35 @@ export function parseCommandArguments(argv: readonly string[]):
 }
 
 export function parseBenchmarkCliOptions(
-  args: readonly string[],
+  argsOrValues: readonly string[] | Readonly<Record<string, unknown>>,
   existingBenchmark?: BenchmarkSpec
 ): { ok: true; benchmark?: BenchmarkSpec; profile?: RegressionProfile } | { ok: false; error: string } {
-  const metricIdx = args.indexOf("--metric");
-  const rawMetric = metricIdx >= 0 ? args[metricIdx + 1] : undefined;
+  const isValues = !Array.isArray(argsOrValues);
+  const getOpt = (name: string): string | undefined => {
+    if (isValues) {
+      const v = (argsOrValues as Record<string, unknown>)[name];
+      return typeof v === "string" ? v : undefined;
+    }
+    const idx = (argsOrValues as readonly string[]).indexOf(`--${name}`);
+    const next = idx >= 0 ? (argsOrValues as readonly string[])[idx + 1] : undefined;
+    return idx >= 0 && next && !next.startsWith("--") ? next : undefined;
+  };
+  const hasOpt = (name: string): boolean => {
+    if (isValues) {
+      return (argsOrValues as Record<string, unknown>)[name] !== undefined;
+    }
+    return (argsOrValues as readonly string[]).indexOf(`--${name}`) >= 0;
+  };
 
-  if (metricIdx >= 0 && (!rawMetric || rawMetric.startsWith("--"))) {
+  const rawMetric = getOpt("metric");
+  if (hasOpt("metric") && !rawMetric) {
     return { ok: false, error: "Missing argument for --metric <name>" };
   }
 
-  const thresholdIdx = args.indexOf("--threshold");
-  const rawThreshold = thresholdIdx >= 0 ? args[thresholdIdx + 1] : undefined;
+  const rawThreshold = getOpt("threshold");
   let threshold: number | undefined = existingBenchmark?.threshold;
-  if (thresholdIdx >= 0) {
-    if (!rawThreshold || rawThreshold.startsWith("--")) {
+  if (hasOpt("threshold")) {
+    if (!rawThreshold) {
       return { ok: false, error: "Missing argument for --threshold <number>" };
     }
     const val = Number(rawThreshold);
@@ -220,11 +314,10 @@ export function parseBenchmarkCliOptions(
     threshold = val;
   }
 
-  const relIdx = args.indexOf("--relative-regression");
-  const rawRel = relIdx >= 0 ? args[relIdx + 1] : undefined;
+  const rawRel = getOpt("relative-regression");
   let relativeRegression: number | undefined = existingBenchmark?.relativeRegression;
-  if (relIdx >= 0) {
-    if (!rawRel || rawRel.startsWith("--")) {
+  if (hasOpt("relative-regression")) {
+    if (!rawRel) {
       return { ok: false, error: "Missing argument for --relative-regression <val>" };
     }
     const cleanRel = rawRel.replace(/%$/, "").trim();
@@ -235,11 +328,10 @@ export function parseBenchmarkCliOptions(
     relativeRegression = val > 1.0 ? val / 100 : val;
   }
 
-  const dirIdx = args.indexOf("--direction");
-  const rawDir = dirIdx >= 0 ? args[dirIdx + 1] : undefined;
+  const rawDir = getOpt("direction");
   let direction: BenchmarkDirection = existingBenchmark?.direction ?? "higher_is_worse";
-  if (dirIdx >= 0) {
-    if (!rawDir || rawDir.startsWith("--")) {
+  if (hasOpt("direction")) {
+    if (!rawDir) {
       return { ok: false, error: "Missing argument for --direction <higher_is_worse|lower_is_worse>" };
     }
     const normalized = rawDir.toLowerCase().trim();
@@ -252,11 +344,10 @@ export function parseBenchmarkCliOptions(
     }
   }
 
-  const warmupIdx = args.indexOf("--warmup");
-  const rawWarmup = warmupIdx >= 0 ? args[warmupIdx + 1] : undefined;
+  const rawWarmup = getOpt("warmup");
   let warmup = existingBenchmark?.warmup ?? 1;
-  if (warmupIdx >= 0) {
-    if (!rawWarmup || rawWarmup.startsWith("--")) {
+  if (hasOpt("warmup")) {
+    if (!rawWarmup) {
       return { ok: false, error: "Missing argument for --warmup <integer>" };
     }
     const val = Number(rawWarmup);
@@ -266,11 +357,10 @@ export function parseBenchmarkCliOptions(
     warmup = val;
   }
 
-  const samplesIdx = args.indexOf("--samples") >= 0 ? args.indexOf("--samples") : args.indexOf("--min-samples");
-  const rawSamples = samplesIdx >= 0 ? args[samplesIdx + 1] : undefined;
+  const rawSamples = getOpt("samples") ?? getOpt("min-samples");
   let minSamples = existingBenchmark?.minSamples ?? 3;
-  if (samplesIdx >= 0) {
-    if (!rawSamples || rawSamples.startsWith("--")) {
+  if (hasOpt("samples") || hasOpt("min-samples")) {
+    if (!rawSamples) {
       return { ok: false, error: "Missing argument for --samples / --min-samples <integer>" };
     }
     const val = Number(rawSamples);
@@ -280,11 +370,10 @@ export function parseBenchmarkCliOptions(
     minSamples = val;
   }
 
-  const maxSamplesIdx = args.indexOf("--max-samples");
-  const rawMaxSamples = maxSamplesIdx >= 0 ? args[maxSamplesIdx + 1] : undefined;
+  const rawMaxSamples = getOpt("max-samples");
   let maxSamples = existingBenchmark?.maxSamples ?? Math.max(10, minSamples);
-  if (maxSamplesIdx >= 0) {
-    if (!rawMaxSamples || rawMaxSamples.startsWith("--")) {
+  if (hasOpt("max-samples")) {
+    if (!rawMaxSamples) {
       return { ok: false, error: "Missing argument for --max-samples <integer>" };
     }
     const val = Number(rawMaxSamples);
@@ -294,11 +383,10 @@ export function parseBenchmarkCliOptions(
     maxSamples = val;
   }
 
-  const alphaIdx = args.indexOf("--alpha");
-  const rawAlpha = alphaIdx >= 0 ? args[alphaIdx + 1] : undefined;
+  const rawAlpha = getOpt("alpha");
   let alpha = existingBenchmark?.alpha ?? 0.05;
-  if (alphaIdx >= 0) {
-    if (!rawAlpha || rawAlpha.startsWith("--")) {
+  if (hasOpt("alpha")) {
+    if (!rawAlpha) {
       return { ok: false, error: "Missing argument for --alpha <number>" };
     }
     const val = Number(rawAlpha);
@@ -308,11 +396,10 @@ export function parseBenchmarkCliOptions(
     alpha = val;
   }
 
-  const unitIdx = args.indexOf("--unit");
-  const rawUnit = unitIdx >= 0 ? args[unitIdx + 1] : undefined;
+  const rawUnit = getOpt("unit");
   let unit = existingBenchmark?.unit;
-  if (unitIdx >= 0) {
-    if (!rawUnit || rawUnit.startsWith("--")) {
+  if (hasOpt("unit")) {
+    if (!rawUnit) {
       return { ok: false, error: "Missing argument for --unit <string>" };
     }
     unit = rawUnit.trim();
@@ -341,17 +428,34 @@ export function parseBenchmarkCliOptions(
 }
 
 function parseSandboxCliOptions(
-  args: readonly string[],
+  argsOrValues: readonly string[] | Readonly<Record<string, unknown>>,
   existing?: ContainerSandboxPolicy
 ): { ok: true; sandbox?: ContainerSandboxPolicy } | { ok: false; error: string } {
-  const runtimeIdx = args.indexOf("--sandbox");
-  const imageIdx = args.indexOf("--sandbox-image");
-  if (runtimeIdx < 0 && imageIdx < 0) return { ok: true, ...(existing ? { sandbox: existing } : {}) };
-  const rawRuntime = runtimeIdx >= 0 ? args[runtimeIdx + 1] : existing?.runtime;
-  const rawImage = imageIdx >= 0 ? args[imageIdx + 1] : existing?.image;
-  if (!rawRuntime || rawRuntime.startsWith("--")) return { ok: false, error: "Missing argument for --sandbox <docker|podman>" };
+  const isValues = !Array.isArray(argsOrValues);
+  const getOpt = (name: string): string | undefined => {
+    if (isValues) {
+      const v = (argsOrValues as Record<string, unknown>)[name];
+      return typeof v === "string" ? v : undefined;
+    }
+    const idx = (argsOrValues as readonly string[]).indexOf(`--${name}`);
+    const next = idx >= 0 ? (argsOrValues as readonly string[])[idx + 1] : undefined;
+    return idx >= 0 && next && !next.startsWith("--") ? next : undefined;
+  };
+  const hasOpt = (name: string): boolean => {
+    if (isValues) {
+      return (argsOrValues as Record<string, unknown>)[name] !== undefined;
+    }
+    return (argsOrValues as readonly string[]).indexOf(`--${name}`) >= 0;
+  };
+
+  if (!hasOpt("sandbox") && !hasOpt("sandbox-image")) {
+    return { ok: true, ...(existing ? { sandbox: existing } : {}) };
+  }
+  const rawRuntime = getOpt("sandbox") ?? existing?.runtime;
+  const rawImage = getOpt("sandbox-image") ?? existing?.image;
+  if (!rawRuntime) return { ok: false, error: "Missing argument for --sandbox <docker|podman>" };
   if (rawRuntime !== "docker" && rawRuntime !== "podman") return { ok: false, error: `Invalid --sandbox "${rawRuntime}": use docker or podman` };
-  if (!rawImage || rawImage.startsWith("--")) return { ok: false, error: "Sandbox mode requires --sandbox-image <repo@sha256:...> or execution.sandbox.image" };
+  if (!rawImage) return { ok: false, error: "Sandbox mode requires --sandbox-image <repo@sha256:...> or execution.sandbox.image" };
   return {
     ok: true,
     sandbox: {
@@ -362,7 +466,6 @@ function parseSandboxCliOptions(
     },
   };
 }
-
 
 export function createStarterConfig(repoRoot = "."): BisectConfigV1 {
   return {
@@ -412,20 +515,26 @@ export function splitInlineCommand(argv: readonly string[]): {
   };
 }
 
-function readOptionValue(args: readonly string[], option: string): string | undefined {
-  const index = args.indexOf(option);
-  const value = index >= 0 ? args[index + 1] : undefined;
-  return value && !value.startsWith("--") ? value : undefined;
-}
-
 function parseInlineTimeout(
-  args: readonly string[],
+  argsOrValues: readonly string[] | Readonly<Record<string, unknown>>,
   defaultValue: number
 ): { ok: true; value: number } | { ok: false; error: string } {
-  const index = args.indexOf("--timeout");
-  if (index < 0) return { ok: true, value: defaultValue };
-  const raw = args[index + 1];
-  if (!raw || raw.startsWith("--")) {
+  let raw: unknown;
+  let hasFlag = false;
+  if (Array.isArray(argsOrValues)) {
+    const idx = argsOrValues.indexOf("--timeout");
+    if (idx >= 0) {
+      hasFlag = true;
+      raw = argsOrValues[idx + 1];
+    }
+  } else {
+    if ((argsOrValues as Record<string, unknown>).timeout !== undefined) {
+      hasFlag = true;
+      raw = (argsOrValues as Record<string, unknown>).timeout;
+    }
+  }
+  if (!hasFlag) return { ok: true, value: defaultValue };
+  if (!raw || (typeof raw === "string" && raw.startsWith("--"))) {
     return { ok: false, error: "Missing argument for --timeout <ms>" };
   }
   const value = Number(raw);
@@ -455,11 +564,11 @@ function applyInlineCommand(
 }
 
 function createInlineConfig(
-  args: readonly string[],
+  values: Readonly<Record<string, unknown>>,
   inlineCommand: InlineCommand
 ): { ok: true; value: BisectConfigV1 } | { ok: false; error: string } {
-  const goodRef = readOptionValue(args, "--good");
-  const badRef = readOptionValue(args, "--bad");
+  const goodRef = values.good as string | undefined;
+  const badRef = values.bad as string | undefined;
   if (!goodRef || !badRef) {
     return {
       ok: false,
@@ -468,7 +577,7 @@ function createInlineConfig(
   }
 
   const starter = createStarterConfig(process.cwd());
-  const timeout = parseInlineTimeout(args, starter.oracle.command.timeoutMs);
+  const timeout = parseInlineTimeout(values, starter.oracle.command.timeoutMs);
   if (!timeout.ok) return timeout;
 
   return {
@@ -581,12 +690,10 @@ export async function runCli(
     return 0;
   }
 
-  if (cmd && cmd !== "daemon" && cmd !== "worker" && CLI_OPTION_TABLES[cmd]) {
-    const parsed = parseCommandArguments(args);
-    if (!parsed.ok) {
-      process.stderr.write(`${parsed.error}\n`);
-      return 2;
-    }
+  const parsed = parseCommandArguments(args);
+  if (!parsed.ok) {
+    process.stderr.write(`${parsed.error}\n`);
+    return 2;
   }
 
   if (args.includes("--help") || args.includes("-h")) {
@@ -601,19 +708,32 @@ export async function runCli(
 
   const engine = engineOverride ?? new LocalBisectEngine();
 
-  if (cmd === "daemon") return runDaemonCommand(args.slice(1), engine);
-  if (cmd === "worker") return runWorkerCommand(args.slice(1), engine);
+  if (cmd === "daemon") {
+    try {
+      return await runDaemonCommand(args.slice(1), engine);
+    } catch (error: unknown) {
+      process.stderr.write(`${(error as Error).message}\n`);
+      return 2;
+    }
+  }
+  if (cmd === "worker") {
+    try {
+      return await runWorkerCommand(args.slice(1), engine);
+    } catch (error: unknown) {
+      process.stderr.write(`${(error as Error).message}\n`);
+      return 2;
+    }
+  }
 
   if (cmd === "doctor") {
-    const report = await engine.doctor(args[1] ?? ".");
+    const report = await engine.doctor(parsed.positionals[0] ?? ".");
     process.stdout.write(JSON.stringify(report, null, 2) + "\n");
     return report.ok ? 0 : 1;
   }
 
   if (cmd === "init") {
-    const outIdx = args.indexOf("--out");
-    const outPath = path.resolve(outIdx >= 0 && args[outIdx + 1] ? args[outIdx + 1]! : "bisectpilot.config.json");
-    if (existsSync(outPath) && !args.includes("--force")) {
+    const outPath = path.resolve((parsed.values.out as string | undefined) ?? "bisectpilot.config.json");
+    if (existsSync(outPath) && !parsed.values.force) {
       process.stderr.write(`Config file already exists at ${outPath} (use --force to overwrite)\n`);
       return 2;
     }
@@ -624,15 +744,7 @@ export async function runCli(
   }
 
   if (cmd === "plan") {
-    const cfgIdx = args.indexOf("--config");
-    const cfgPath = cfgIdx >= 0 ? args[cfgIdx + 1] : undefined;
-    if (cfgIdx >= 0 && !cfgPath) {
-      process.stderr.write("Missing --config <path>\n");
-      return 2;
-    }
-    const goodIdx = args.indexOf("--good");
-    const badIdx = args.indexOf("--bad");
-    const termsIdx = args.indexOf("--terms");
+    const cfgPath = parsed.values.config as string | undefined;
     let activeConfig: BisectConfigV1;
     if (cfgPath) {
       const validated = loadConfigFromFile(cfgPath);
@@ -642,7 +754,7 @@ export async function runCli(
       }
       activeConfig = validated.value;
       if (inlineCommand) {
-        const timeout = parseInlineTimeout(args, activeConfig.oracle.command.timeoutMs);
+        const timeout = parseInlineTimeout(parsed.values, activeConfig.oracle.command.timeoutMs);
         if (!timeout.ok) {
           process.stderr.write(`${timeout.error}\n`);
           return 2;
@@ -656,52 +768,35 @@ export async function runCli(
         );
         return 2;
       }
-      const inlineConfig = createInlineConfig(args, inlineCommand);
+      const inlineConfig = createInlineConfig(parsed.values, inlineCommand);
       if (!inlineConfig.ok) {
         process.stderr.write(`${inlineConfig.error}\n`);
         return 2;
       }
       activeConfig = inlineConfig.value;
     }
-    if (goodIdx >= 0 && args[goodIdx + 1]) {
-      activeConfig = { ...activeConfig, goodRef: args[goodIdx + 1]! };
+    if (parsed.values.good) {
+      activeConfig = { ...activeConfig, goodRef: parsed.values.good as string };
     }
-    if (badIdx >= 0 && args[badIdx + 1]) {
-      activeConfig = { ...activeConfig, badRef: args[badIdx + 1]! };
+    if (parsed.values.bad) {
+      activeConfig = { ...activeConfig, badRef: parsed.values.bad as string };
     }
-    if (termsIdx >= 0) {
-      const rawTerms = args[termsIdx + 1];
-      if (!rawTerms) {
-        process.stderr.write("Missing argument for --terms <old,new>\n");
-        return 2;
-      }
-      const parsedTerms = parseTermsOption(rawTerms);
+    if (parsed.values.terms) {
+      const parsedTerms = parseTermsOption(parsed.values.terms as string);
       if (!parsedTerms.ok) {
         process.stderr.write(`Invalid --terms: ${parsedTerms.error}\n`);
         return 2;
       }
       activeConfig = { ...activeConfig, terms: parsedTerms.value };
     }
-    const cwdIdx = args.indexOf("--cwd");
-    if (cwdIdx >= 0) {
-      const rawCwd = args[cwdIdx + 1];
-      if (!rawCwd || rawCwd.startsWith("--")) {
-        process.stderr.write("Missing argument for --cwd <path>\n");
-        return 2;
-      }
-      activeConfig = { ...activeConfig, workingDirectory: rawCwd.trim() };
+    if (parsed.values.cwd) {
+      activeConfig = { ...activeConfig, workingDirectory: (parsed.values.cwd as string).trim() };
     }
-    const scopeIdx = args.indexOf("--scope");
-    if (scopeIdx >= 0) {
-      const rawScope = args[scopeIdx + 1];
-      if (!rawScope || rawScope.startsWith("--")) {
-        process.stderr.write("Missing argument for --scope <path,path,...>\n");
-        return 2;
-      }
-      const scopes = rawScope.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parsed.values.scope) {
+      const scopes = (parsed.values.scope as string).split(",").map((s) => s.trim()).filter(Boolean);
       activeConfig = { ...activeConfig, pathScope: scopes };
     }
-    const benchOpt = parseBenchmarkCliOptions(args, activeConfig.benchmark);
+    const benchOpt = parseBenchmarkCliOptions(parsed.values, activeConfig.benchmark);
     if (!benchOpt.ok) {
       process.stderr.write(`${benchOpt.error}\n`);
       return 2;
@@ -713,7 +808,7 @@ export async function runCli(
         benchmark: benchOpt.benchmark,
       };
     }
-    const sandboxPlan = parseSandboxCliOptions(args, activeConfig.execution.sandbox);
+    const sandboxPlan = parseSandboxCliOptions(parsed.values, activeConfig.execution.sandbox);
     if (!sandboxPlan.ok) {
       process.stderr.write(`${sandboxPlan.error}\n`);
       return 2;
@@ -731,16 +826,8 @@ export async function runCli(
   }
 
   if (cmd === "start" || cmd === "run") {
-    const cfgIdx = args.indexOf("--config");
-    const cfgPath = cfgIdx >= 0 ? args[cfgIdx + 1] : undefined;
-    const autoYes = args.includes("--yes");
-    if (cfgIdx >= 0 && !cfgPath) {
-      process.stderr.write("Missing --config <path>\n");
-      return 2;
-    }
-    const goodIdx = args.indexOf("--good");
-    const badIdx = args.indexOf("--bad");
-    const termsIdx = args.indexOf("--terms");
+    const cfgPath = parsed.values.config as string | undefined;
+    const autoYes = Boolean(parsed.values.yes);
     let activeConfig: BisectConfigV1;
     if (cfgPath) {
       const validated = loadConfigFromFile(cfgPath);
@@ -750,7 +837,7 @@ export async function runCli(
       }
       activeConfig = validated.value;
       if (inlineCommand) {
-        const timeout = parseInlineTimeout(args, activeConfig.oracle.command.timeoutMs);
+        const timeout = parseInlineTimeout(parsed.values, activeConfig.oracle.command.timeoutMs);
         if (!timeout.ok) {
           process.stderr.write(`${timeout.error}\n`);
           return 2;
@@ -764,52 +851,35 @@ export async function runCli(
         );
         return 2;
       }
-      const inlineConfig = createInlineConfig(args, inlineCommand);
+      const inlineConfig = createInlineConfig(parsed.values, inlineCommand);
       if (!inlineConfig.ok) {
         process.stderr.write(`${inlineConfig.error}\n`);
         return 2;
       }
       activeConfig = inlineConfig.value;
     }
-    if (goodIdx >= 0 && args[goodIdx + 1]) {
-      activeConfig = { ...activeConfig, goodRef: args[goodIdx + 1]! };
+    if (parsed.values.good) {
+      activeConfig = { ...activeConfig, goodRef: parsed.values.good as string };
     }
-    if (badIdx >= 0 && args[badIdx + 1]) {
-      activeConfig = { ...activeConfig, badRef: args[badIdx + 1]! };
+    if (parsed.values.bad) {
+      activeConfig = { ...activeConfig, badRef: parsed.values.bad as string };
     }
-    if (termsIdx >= 0) {
-      const rawTerms = args[termsIdx + 1];
-      if (!rawTerms) {
-        process.stderr.write("Missing argument for --terms <old,new>\n");
-        return 2;
-      }
-      const parsedTerms = parseTermsOption(rawTerms);
+    if (parsed.values.terms) {
+      const parsedTerms = parseTermsOption(parsed.values.terms as string);
       if (!parsedTerms.ok) {
         process.stderr.write(`Invalid --terms: ${parsedTerms.error}\n`);
         return 2;
       }
       activeConfig = { ...activeConfig, terms: parsedTerms.value };
     }
-    const cwdIdx = args.indexOf("--cwd");
-    if (cwdIdx >= 0) {
-      const rawCwd = args[cwdIdx + 1];
-      if (!rawCwd || rawCwd.startsWith("--")) {
-        process.stderr.write("Missing argument for --cwd <path>\n");
-        return 2;
-      }
-      activeConfig = { ...activeConfig, workingDirectory: rawCwd.trim() };
+    if (parsed.values.cwd) {
+      activeConfig = { ...activeConfig, workingDirectory: (parsed.values.cwd as string).trim() };
     }
-    const scopeIdx = args.indexOf("--scope");
-    if (scopeIdx >= 0) {
-      const rawScope = args[scopeIdx + 1];
-      if (!rawScope || rawScope.startsWith("--")) {
-        process.stderr.write("Missing argument for --scope <path,path,...>\n");
-        return 2;
-      }
-      const scopes = rawScope.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parsed.values.scope) {
+      const scopes = (parsed.values.scope as string).split(",").map((s) => s.trim()).filter(Boolean);
       activeConfig = { ...activeConfig, pathScope: scopes };
     }
-    if (args.includes("--prompt")) {
+    if (parsed.values.prompt) {
       activeConfig = {
         ...activeConfig,
         execution: {
@@ -818,7 +888,7 @@ export async function runCli(
         },
       };
     }
-    if (args.includes("--noisy")) {
+    if (parsed.values.noisy) {
       activeConfig = {
         ...activeConfig,
         execution: {
@@ -833,7 +903,7 @@ export async function runCli(
         },
       };
     }
-    const startBenchOpt = parseBenchmarkCliOptions(args, activeConfig.benchmark);
+    const startBenchOpt = parseBenchmarkCliOptions(parsed.values, activeConfig.benchmark);
     if (!startBenchOpt.ok) {
       process.stderr.write(`${startBenchOpt.error}\n`);
       return 2;
@@ -845,16 +915,14 @@ export async function runCli(
         benchmark: startBenchOpt.benchmark,
       };
     }
-    const sandboxStart = parseSandboxCliOptions(args, activeConfig.execution.sandbox);
+    const sandboxStart = parseSandboxCliOptions(parsed.values, activeConfig.execution.sandbox);
     if (!sandboxStart.ok) {
       process.stderr.write(`${sandboxStart.error}\n`);
       return 2;
     }
     if (sandboxStart.sandbox) activeConfig = { ...activeConfig, execution: { ...activeConfig.execution, sandbox: sandboxStart.sandbox } };
-    const ghSummaryIdx = args.indexOf("--github-summary");
-    if (ghSummaryIdx >= 0) {
-      const nextArg = args[ghSummaryIdx + 1];
-      const customPath = nextArg && !nextArg.startsWith("--") ? nextArg : undefined;
+    if (parsed.values["github-summary"]) {
+      const customPath = parsed.positionals[0];
       if (customPath) {
         process.env.GITHUB_STEP_SUMMARY = path.resolve(customPath);
       }
@@ -869,11 +937,11 @@ export async function runCli(
       process.stderr.write("Refusing to execute historical repository code without --yes consent flag.\n");
       return 3;
     }
-    if (args.includes("--background")) {
-      const stateDirIdx = args.indexOf("--daemon-state-dir");
-      const stateDir = path.resolve(stateDirIdx >= 0 && args[stateDirIdx + 1] ? args[stateDirIdx + 1]! : defaultDaemonStateDir());
-      const repoKeyIdx = args.indexOf("--repository-key");
-      const repositoryKey = repoKeyIdx >= 0 && args[repoKeyIdx + 1] ? args[repoKeyIdx + 1]! : "default";
+    if (parsed.values.background) {
+      const stateDir = path.resolve(
+        (parsed.values["daemon-state-dir"] as string | undefined) ?? defaultDaemonStateDir()
+      );
+      const repositoryKey = (parsed.values["repository-key"] as string | undefined) ?? "default";
       try {
         const job = await enqueueBisectJob(activeConfig, stateDir, repositoryKey, engine);
         process.stdout.write(JSON.stringify(job, null, 2) + "\n");
@@ -893,7 +961,7 @@ export async function runCli(
         abortSignal: abortController.signal,
         onEvent: writeProgressEvent,
       });
-      if (args.includes("--json")) {
+      if (parsed.values.json) {
         process.stdout.write(JSON.stringify(manifest, null, 2) + "\n");
       } else {
         process.stdout.write(await formatSessionSummary(manifest));
@@ -906,26 +974,24 @@ export async function runCli(
   }
 
   if (cmd === "status") {
-    const sessionId = args[1];
+    const sessionId = parsed.positionals[0];
     if (!sessionId) {
       process.stderr.write("Missing <sessionId>\n");
       return 2;
     }
-    const rootIdx = args.indexOf("--session-root");
-    const sessionRoot = rootIdx >= 0 ? args[rootIdx + 1] : undefined;
+    const sessionRoot = parsed.values["session-root"] as string | undefined;
     const status = await engine.status(sessionId, sessionRoot);
     process.stdout.write(JSON.stringify(status, null, 2) + "\n");
     return 0;
   }
 
   if (cmd === "resume") {
-    const sessionId = args[1];
+    const sessionId = parsed.positionals[0];
     if (!sessionId) {
       process.stderr.write("Missing <sessionId>\n");
       return 2;
     }
-    const rootIdx = args.indexOf("--session-root");
-    const sessionRoot = rootIdx >= 0 ? args[rootIdx + 1] : undefined;
+    const sessionRoot = parsed.values["session-root"] as string | undefined;
     const abortController = new AbortController();
     const onSig = () => abortController.abort();
     process.once("SIGINT", onSig);
@@ -936,7 +1002,7 @@ export async function runCli(
         { abortSignal: abortController.signal, onEvent: writeProgressEvent },
         sessionRoot
       );
-      if (args.includes("--json")) {
+      if (parsed.values.json) {
         process.stdout.write(JSON.stringify(manifest, null, 2) + "\n");
       } else {
         process.stdout.write(await formatSessionSummary(manifest));
@@ -949,19 +1015,20 @@ export async function runCli(
   }
 
   if (cmd === "report") {
-    const sessionId = args[1];
+    const sessionId = parsed.positionals[0];
     if (!sessionId) {
       process.stderr.write("Missing <sessionId>\n");
       return 2;
     }
-    const rootIdx = args.indexOf("--session-root");
-    const sessionRoot = rootIdx >= 0 ? args[rootIdx + 1] : undefined;
-    const outIdx = args.indexOf("--out");
-    const outPath = outIdx >= 0 ? args[outIdx + 1] : undefined;
+    const sessionRoot = parsed.values["session-root"] as string | undefined;
+    const outPath = parsed.values.out as string | undefined;
 
     const status = await engine.status(sessionId, sessionRoot);
-    const events = readLedgerEvents(status.manifest.ledgerPath);
-    if (args.includes("--verify")) {
+    const events = existsSync(status.manifest.ledgerPath)
+      ? readLedgerEvents(status.manifest.ledgerPath)
+      : [];
+
+    if (parsed.values.verify) {
       const check = verifyLedgerChain(events);
       if (!check.valid) {
         process.stderr.write(`Ledger verification failed: ${check.reason}\n`);
@@ -969,10 +1036,8 @@ export async function runCli(
       }
     }
 
-    const ghSummaryIdx = args.indexOf("--github-summary");
-    if (ghSummaryIdx >= 0) {
-      const nextArg = args[ghSummaryIdx + 1];
-      const customPath = nextArg && !nextArg.startsWith("--") ? nextArg : undefined;
+    if (parsed.values["github-summary"]) {
+      const customPath = parsed.positionals[1];
       const targetPath = customPath ?? process.env.GITHUB_STEP_SUMMARY;
       if (!targetPath) {
         process.stderr.write(
@@ -990,7 +1055,7 @@ export async function runCli(
       return 0;
     }
 
-    if (args.includes("--github-issue")) {
+    if (parsed.values["github-issue"]) {
       const issueMd = generateGitHubIssueMarkdown(status.manifest, events);
       if (outPath) {
         const resolved = path.resolve(outPath);
@@ -1003,7 +1068,7 @@ export async function runCli(
       return 0;
     }
 
-    if (args.includes("--html")) {
+    if (parsed.values.html) {
       const htmlText = generateHtmlReport(status.manifest, events);
       if (outPath) {
         const resolved = path.resolve(outPath);
@@ -1016,7 +1081,7 @@ export async function runCli(
       return 0;
     }
 
-    if (args.includes("--json")) {
+    if (parsed.values.json) {
       const jsonText = JSON.stringify(generateJsonReport(status.manifest, events), null, 2) + "\n";
       if (outPath) {
         const resolved = path.resolve(outPath);
@@ -1042,87 +1107,65 @@ export async function runCli(
   }
 
   if (cmd === "cleanup") {
-    const sessionId = args[1];
+    const sessionId = parsed.positionals[0];
     if (!sessionId) {
       process.stderr.write("Missing <sessionId>\n");
       return 2;
     }
-    const dryRun = args.includes("--dry-run");
-    const rootIdx = args.indexOf("--session-root");
-    const sessionRoot = rootIdx >= 0 ? args[rootIdx + 1] : undefined;
+    const dryRun = Boolean(parsed.values["dry-run"]);
+    const sessionRoot = parsed.values["session-root"] as string | undefined;
     const res = await engine.cleanup(sessionId, { dryRun }, sessionRoot);
     process.stdout.write(JSON.stringify(res, null, 2) + "\n");
     return 0;
   }
 
   if (cmd === "list") {
-    const rootIdx = args.indexOf("--session-root");
-    const sessionRoot = rootIdx >= 0 ? args[rootIdx + 1] : undefined;
+    const sessionRoot = parsed.values["session-root"] as string | undefined;
     const items = await engine.list(sessionRoot);
     process.stdout.write(JSON.stringify(items, null, 2) + "\n");
     return 0;
   }
 
   if (cmd === "minimize") {
-
-    let inputPath = args[1] && !args[1].startsWith("-") ? args[1] : undefined;
-    const inputIdx = args.indexOf("--input");
-    if (inputIdx >= 0 && args[inputIdx + 1]) {
-      inputPath = args[inputIdx + 1];
-    }
-
+    const inputPath = (parsed.values.input as string | undefined) ?? parsed.positionals[0];
     if (!inputPath) {
       process.stderr.write("Missing <inputPath> to minimize\n");
       return 2;
     }
 
-    const testIdx = args.indexOf("--test");
-    const testCmd = testIdx >= 0 ? args[testIdx + 1] : undefined;
+    const testCmd = parsed.values.test as string | undefined;
     if (!testCmd) {
       process.stderr.write("Missing --test <command>\n");
       return 2;
     }
 
-    const outIdx = args.indexOf("--out");
-    const outputPath = outIdx >= 0 ? args[outIdx + 1] : undefined;
+    const outputPath = parsed.values.out as string | undefined;
 
-    const budgetIdx = args.indexOf("--budget");
-    const rawBudget = budgetIdx >= 0 ? args[budgetIdx + 1] : undefined;
+    const rawBudget = parsed.values.budget as string | undefined;
     const budget = rawBudget === undefined ? undefined : Number(rawBudget);
     if (budget !== undefined && (!Number.isInteger(budget) || budget < 1)) {
       process.stderr.write(`Invalid --budget "${rawBudget}": must be a positive integer\n`);
       return 2;
     }
 
-    const timeoutIdx = args.indexOf("--timeout");
-    const rawTimeout = timeoutIdx >= 0 ? args[timeoutIdx + 1] : undefined;
+    const rawTimeout = parsed.values.timeout as string | undefined;
     const timeoutMs = rawTimeout === undefined ? undefined : Number(rawTimeout);
     if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
       process.stderr.write(`Invalid --timeout "${rawTimeout}": must be a positive finite number\n`);
       return 2;
     }
 
-    const granIdx = args.indexOf("--granularity");
-    const rawGran = granIdx >= 0 ? args[granIdx + 1] : undefined;
+    const rawGran = parsed.values.granularity as string | undefined;
     const granularity: MinimizerGranularity | undefined =
       rawGran === "char" || rawGran === "both" || rawGran === "line" ? rawGran : undefined;
 
-    let testArgs: string[] = [];
-    for (let i = 0; i < args.length; i++) {
-      if (args[i] === "--arg" && args[i + 1]) {
-        testArgs.push(args[i + 1]!);
-        i++;
-      }
+    let testArgs: string[] | undefined = (parsed.values.arg as string[] | undefined);
+    if (!testArgs && parsed.values.args) {
+      testArgs = (parsed.values.args as string).split(",").map((s) => s.trim());
     }
-    const argsIdx = args.indexOf("--args");
-    if (argsIdx >= 0 && args[argsIdx + 1] && testArgs.length === 0) {
-      testArgs = args[argsIdx + 1]!.split(",").map((s) => s.trim());
-    }
-    const finalArgs = testArgs.length > 0 ? testArgs : undefined;
 
-
-    const noisy = args.includes("--noisy");
-    const overwrite = args.includes("--force");
+    const noisy = Boolean(parsed.values.noisy);
+    const overwrite = Boolean(parsed.values.force);
 
     try {
       const localEngine = engine instanceof LocalBisectEngine ? engine : new LocalBisectEngine();
@@ -1130,7 +1173,7 @@ export async function runCli(
         inputPath,
         outputPath,
         testCommand: testCmd,
-        testArgs: finalArgs,
+        testArgs,
         timeoutMs,
         maxEvaluations: budget,
         granularity,
@@ -1138,8 +1181,7 @@ export async function runCli(
         overwriteOutput: overwrite,
       });
 
-
-      if (args.includes("--json")) {
+      if (parsed.values.json) {
         process.stdout.write(JSON.stringify(formatMinimizationReportJson(result), null, 2) + "\n");
       } else {
         process.stdout.write(formatMinimizationReportMarkdown(result) + "\n");

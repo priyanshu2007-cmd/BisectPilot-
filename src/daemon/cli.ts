@@ -24,6 +24,8 @@ function numberAfter(args: readonly string[], flag: string, fallback: number): n
   if (raw === undefined) return fallback;
   const value = Number(raw);
   if (!Number.isInteger(value)) throw new Error(`${flag} must be an integer`);
+  if (flag === "--port" && (value < 1 || value > 65535)) throw new Error(`${flag} must be between 1 and 65535`);
+  if ((flag === "--lease-ms" || flag === "--heartbeat-ms") && value <= 0) throw new Error(`${flag} must be a positive integer`);
   return value;
 }
 
@@ -117,6 +119,9 @@ async function runDaemonForeground(args: readonly string[]): Promise<number> {
 
 async function startDaemon(args: readonly string[]): Promise<number> {
   const stateDir = path.resolve(valueAfter(args, "--state-dir") ?? defaultDaemonStateDir());
+  numberAfter(args, "--port", 4317);
+  numberAfter(args, "--lease-ms", 30_000);
+  numberAfter(args, "--heartbeat-ms", 5_000);
   if (args.includes("--foreground")) return runDaemonForeground(args);
   if (existsSync(daemonStatePath(stateDir))) {
     const previous = readDaemonState(stateDir);
