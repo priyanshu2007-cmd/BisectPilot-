@@ -136,6 +136,7 @@ No database configured yet. Update this section when database schemas/models are
 - 2026-10-20 — Executed Release Verification & Hardening Milestone: fresh-clone E2E bisection proof (`fresh-clone-e2e.test.ts`), `fsyncSync` checkpoint durability on POSIX in `src/session/checkpoint.ts`, subprocess SIGKILL crash tests, unsupported schema (`schemaVersion: 99`) and wrong-repo rejection tests in `tests/integration/session-resume-recovery.test.ts`, multi-machine mTLS runbook in `docs/multimachine-mtls-setup.md`, and updated CLI help documentation. Verified 229 tests (228 pass, 1 skip), 4/4 Python tests, 3/3 package-distribution tests, 8/8 website pages. Pushed commit `82b9497`.
 - 2026-10-20 — Refreshed user-facing documentation and task Markdown: added end-to-end CLI, website, testing, security, and debugging workflows to `README.md`; expanded `website/README.md`; corrected recovery, durability, and platform-limit statements in architecture, safety, handoff, and memory docs; formatted `tasks/todo.md`; and regenerated `uv.lock` from the dependency-free `pyproject.toml`.
 - 2026-10-20 — Updated GitHub repository About description via GitHub API and restructured root `README.md` with verified 5-line product summary, installation options (source vs. gated GitHub Packages), first-run Quick Start, CLI reference, oracle/monorepo/performance guides, safety model, recovery workflows, and accurate Python `bisectpilot:main` invocation (`1ee2e55`).
+- 2026-10-20 — Added clean-Linux reproducibility contract: exact Docker Node image `node:24.18.0-bookworm-slim`, non-root Docker runtime, aggregate `Makefile` targets (`setup`, `build`, `test`, `run`, Docker smoke commands), lockfile/runtime/env/path documentation, and portable relative Markdown links.
 
 ## 12. Important File Map
 
@@ -158,14 +159,14 @@ Use this to decide what files should be opened.
 
 ## 13. Current Task Context
 
-Current task: Documentation, Markdown verification, and project onboarding refresh.
+Current task: Clean-Linux reproducibility and release handoff.
 
 1. `tasks/todo.md` has blank lines around headings and lists; a targeted MD022/MD032/MD038 structural check passes.
 2. Root `README.md` and `website/README.md` explain installation, CLI workflows, website replay, daemon/worker usage, reports, tests, security checks, debugging, and environment-dependent limits.
-3. `docs/architecture.md`, `docs/safety-model.md`, and `docs/handoff.md` agree on request flow, `needs_recovery`, checkpoint `fsyncSync`, and current platform verification gaps.
-4. `uv.lock` was regenerated from the dependency-free `pyproject.toml`; `uv lock --check` passes.
-5. Fresh verification: root TypeScript tests pass across 38 test files with one expected real-container skip; Python tests pass 4/4; website typecheck/lint/build pass; offline npm audits report zero vulnerabilities; redacted Gitleaks scan reports no leaks; package dry-run, CLI doctor/init/plan/help checks, and `git diff --check` pass.
-6. Read-only delegated security/debugging review found no failing implementation tests and recorded remaining concerns: rootless container and interactive browser checks are unavailable locally, GitHub action refs are tag-based, Gitleaks allowlisting is broad, CSP allows inline scripts/styles, and physical multi-machine mTLS remains unverified.
+3. `Dockerfile` uses the pinned Node `24.18.0` image and runs the CLI as non-root; `Makefile` is the canonical local setup/build/test/run entry point.
+4. Root and website npm lockfiles, `uv.lock`, `.nvmrc`, `.python-version`, `.env.example`, `.gitignore`, and `.dockerignore` are present and portable.
+5. Fresh verification: `make test` passes all 38 TypeScript test files with one expected real-container skip, Python 4/4, and website typecheck/lint/build; `make build`, `make run`, offline npm audits, Gitleaks, `uv lock --check`, path scans, and `git diff --check` pass.
+6. Docker image build remains untested locally because the Docker daemon socket is unavailable on this macOS host; CI/Linux Docker verification is the remaining environment-specific check.
 
 Relevant files:
 
@@ -177,6 +178,8 @@ Relevant files:
 - `docs/handoff.md`
 - `pyproject.toml`
 - `uv.lock`
+- `Dockerfile`
+- `Makefile`
 
 Do not open unrelated files.
 
