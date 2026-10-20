@@ -1034,6 +1034,7 @@ export async function runCli(
         process.stderr.write(`Ledger verification failed: ${check.reason}\n`);
         return 1;
       }
+      process.stderr.write(`${resultMarker(true, process.stderr)} Ledger verified: ${events.length} events, hash chain intact\n`);
     }
 
     if (parsed.values["github-summary"]) {

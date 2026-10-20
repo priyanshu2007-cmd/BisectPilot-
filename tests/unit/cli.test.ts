@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendLedgerEvent } from "../../src/ledger/index.js";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -219,5 +220,139 @@ describe("CLI — Dispatch & Command Behavior", () => {
     );
     assert.equal(resPort.code, 2);
     assert.match(resPort.stderr, /port.*must be between 1 and 65535/i);
+  });
+
+  it("confirms ledger verification on stderr and leaves stdout clean", async () => {
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), "bisectpilot-ledger-test-"));
+    try {
+      const ledgerPath = path.join(tmpDir, "ledger.jsonl");
+      appendLedgerEvent(ledgerPath, {
+        sessionId: "verify-success-session",
+        type: "session_created",
+        goodSha: "11111111",
+        badSha: "99999999",
+        worktreePath: "/tmp/worktree",
+        overlayHashes: {},
+      });
+      appendLedgerEvent(ledgerPath, {
+        sessionId: "verify-success-session",
+        type: "revision_classified",
+        commitSha: "44444444",
+        classification: "bad",
+        reasonCode: "oracle_failed_expected_regression",
+        detail: "test failure",
+        gitExitCode: 1,
+        overlayHashes: {},
+      });
+
+      const engine = new FakeEngine();
+      const baseManifest = await engine.start({
+        schemaVersion: 1,
+        profile: "functional",
+        repositoryRoot: tmpDir,
+        workingDirectory: ".",
+        goodRef: "good",
+        badRef: "bad",
+        oracle: { mode: "in-tree", command: { command: "node", args: ["check.js"], timeoutMs: 1000 }, overlayConflictPolicy: "skip" },
+        execution: {
+          maxOutputBytesPerCommand: 1000,
+          maxRetries: 0,
+          endpointFlakeRuns: 1,
+          boundaryConfirmRuns: 1,
+          maxSkips: 1,
+          confirmBeforeExecutingCode: false,
+          cleanIgnored: false,
+          allowlistedEnvVars: [],
+          enforceNodeToolchainCheck: false,
+          interactivePrompt: false,
+        },
+      });
+      engine.addSession({
+        ...baseManifest,
+        id: "verify-success-session",
+        ledgerPath,
+      });
+
+      const result = await captureCliOutput(() =>
+        runCli(["report", "verify-success-session", "--verify"], engine)
+      );
+
+      assert.equal(result.code, 0);
+      assert.match(result.stderr, /OK Ledger verified: 2 events, hash chain intact/);
+      assert.ok(!result.stdout.includes("Ledger verified"));
+      assert.match(result.stdout, /BisectPilot Investigation Report.*verify-success-session/);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails verification on tampered ledger and identifies broken seq", async () => {
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), "bisectpilot-tamper-test-"));
+    try {
+      const ledgerPath = path.join(tmpDir, "ledger.jsonl");
+      appendLedgerEvent(ledgerPath, {
+        sessionId: "tampered-session",
+        type: "session_created",
+        goodSha: "11111111",
+        badSha: "99999999",
+        worktreePath: "/tmp/worktree",
+        overlayHashes: {},
+      });
+      appendLedgerEvent(ledgerPath, {
+        sessionId: "tampered-session",
+        type: "revision_classified",
+        commitSha: "44444444",
+        classification: "bad",
+        reasonCode: "oracle_failed_expected_regression",
+        detail: "test failure",
+        gitExitCode: 1,
+        overlayHashes: {},
+      });
+
+      // Tamper line 2
+      const lines = readFileSync(ledgerPath, "utf-8").trim().split("\n");
+      const ev2 = JSON.parse(lines[1]!);
+      ev2.commitSha = "00000000";
+      lines[1] = JSON.stringify(ev2);
+      writeFileSync(ledgerPath, lines.join("\n") + "\n", "utf-8");
+
+      const engine = new FakeEngine();
+      const baseManifest = await engine.start({
+        schemaVersion: 1,
+        profile: "functional",
+        repositoryRoot: tmpDir,
+        workingDirectory: ".",
+        goodRef: "good",
+        badRef: "bad",
+        oracle: { mode: "in-tree", command: { command: "node", args: ["check.js"], timeoutMs: 1000 }, overlayConflictPolicy: "skip" },
+        execution: {
+          maxOutputBytesPerCommand: 1000,
+          maxRetries: 0,
+          endpointFlakeRuns: 1,
+          boundaryConfirmRuns: 1,
+          maxSkips: 1,
+          confirmBeforeExecutingCode: false,
+          cleanIgnored: false,
+          allowlistedEnvVars: [],
+          enforceNodeToolchainCheck: false,
+          interactivePrompt: false,
+        },
+      });
+      engine.addSession({
+        ...baseManifest,
+        id: "tampered-session",
+        ledgerPath,
+      });
+
+      const result = await captureCliOutput(() =>
+        runCli(["report", "tampered-session", "--verify"], engine)
+      );
+
+      assert.equal(result.code, 1);
+      assert.match(result.stderr, /Ledger verification failed:.*seq 2/);
+      assert.equal(result.stdout, "");
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
