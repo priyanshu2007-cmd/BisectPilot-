@@ -23,5 +23,28 @@ if (testFiles.length === 0) {
   process.exit(1);
 }
 
-const res = spawnSync(process.execPath, ["--test", ...testFiles], { stdio: "inherit" });
-process.exit(res.status ?? 1);
+let failedCount = 0;
+const failedFiles = [];
+
+for (const file of testFiles) {
+  console.log(`\n=== RUNNING: ${file} ===`);
+  const res = spawnSync(process.execPath, ["--test", file], { stdio: "inherit" });
+  if (res.status !== 0) {
+    console.error(`>>> FAILED: ${file} (exit code ${res.status})`);
+    failedCount++;
+    failedFiles.push(file);
+  } else {
+    console.log(`>>> PASSED: ${file}`);
+  }
+}
+
+if (failedCount > 0) {
+  console.error(`\n❌ Test run completed with ${failedCount} failed file(s):`);
+  for (const f of failedFiles) {
+    console.error(`  - ${f}`);
+  }
+  process.exit(1);
+} else {
+  console.log(`\n✅ All ${testFiles.length} test files passed!`);
+  process.exit(0);
+}
