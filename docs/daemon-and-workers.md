@@ -38,4 +38,3 @@ Binding the daemon to a non-loopback address requires HTTPS with server and CA c
 - **Verification note:** Mutual TLS handshakes, CN authorization, dynamic credential rotation, and fingerprint revocation are verified by automated loopback integration tests (`tests/integration/mtls-remote-worker.test.ts`), but deployment across separate physical hosts has not been independently verified in CI.
 
 ---
-

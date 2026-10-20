@@ -14,4 +14,3 @@ bisectpilot start \
 - Uses sequential Bayesian updates with configurable `maxSamplesPerRevision` (`5`), `confidenceThreshold` (`0.90`), and `flakeRate` (`0.10`). If confidence does not reach the threshold within the sample budget, the revision is marked `skip` (`125`) rather than guessing.
 
 ---
-

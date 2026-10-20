@@ -475,4 +475,3 @@ export async function executeInvestigationFromWorktreeReady(
     bisectLogRes.stdout
   );
   }
-

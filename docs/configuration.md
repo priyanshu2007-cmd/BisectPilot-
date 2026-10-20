@@ -75,4 +75,3 @@ Run `bisectpilot plan --config <file>` to validate configuration and repository 
 - **Sandbox policy errors:** `execution.sandbox.image` must match `<lowercase-repo>@sha256:<64-lowercase-hex>`. `interactivePrompt`, `envOverrides`, and secret-like `allowlistedEnvVars` (`TOKEN`, `SECRET`, `PASSWORD`, `PRIVATE_KEY`, `API_KEY`, `AWS_`, `GCP_`, `AZURE_`) are rejected when sandboxing is enabled.
 
 ---
-

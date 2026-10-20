@@ -67,4 +67,3 @@ export async function isPathTrackedInRevision(
   const res = await runGit(["ls-files", "--error-unmatch", "--", relPath], worktreePath);
   return res.exitCode === 0;
 }
-

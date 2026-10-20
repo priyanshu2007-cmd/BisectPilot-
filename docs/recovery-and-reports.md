@@ -47,4 +47,3 @@ bisectpilot report <sessionId> --github-issue --out issue.md
 See [`docs/architecture.md`](docs/architecture.md) for details on the ledger and checkpoint architecture.
 
 ---
-
