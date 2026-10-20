@@ -163,10 +163,25 @@
 - [x] P1.5: Unsupported checkpoint schema version (schemaVersion: 99) and wrong-repository checkpoint rejection tests (`tests/integration/session-resume-recovery.test.ts`)
 - [x] P1.6: Document `needs_recovery` lifecycle, safe inspection, resume commands, and blocked-recovery conditions (`src/cli/index.ts`, `README.md`, `docs/architecture.md`, `docs/safety-model.md`)
 - [x] P1.2: Multi-machine mTLS execution runbook & test harness (`docs/multimachine-mtls-setup.md`, `tests/integration/mtls-remote-worker.test.ts` 10/10 automated tests pass; Physical multi-machine deployment: `BLOCKED` / `UNVERIFIED` due to lack of 2nd physical machine)
-- [!] P1.1: Genuine Linux & Windows CI execution (Investigated CI run 39415440984: Windows checkout blocked by git tree entry with trailing space `skills `; Linux rootless Podman requires container runtime with cgroup v2: `BLOCKED` / `UNVERIFIED`)
+- [x] P1.1: Genuine Linux, macOS & Windows CI execution (Passed on GitHub Actions run 39463385230 across ubuntu-latest, macos-latest, windows-latest on Node 20.x & 22.x; rootless Podman verified on Linux runner; native Windows execution verified)
+
+## Step 15: GitHub CI/CD, Master Branch Discipline & Security Hardening
+- [x] Fix cross-platform test discovery in `scripts/run-tests.mjs` and add regression suite `tests/unit/test-discovery.test.ts`
+- [x] Fix Windows runner test compatibility (cmd.exe quoting, Node ESM pathToFileURL, 8.3 path canonicalization, exit code assertions)
+- [x] Enhance Podman rootless sandbox inspect parsing in `src/adapters/process/sandbox-runtime.ts` for expanded CapDrop, string Entrypoint, and un-delegated cgroup limits
+- [x] Fix bisect output parsing for quoted git terms and direct 0-intermediate candidate resolution in `src/application/index.ts`
+- [x] Add CLI `--version` and `-v` handlers in `src/cli/index.ts`
+- [x] Build and verify cross-platform CI matrix workflow `.github/workflows/ci.yml` (Linux, macOS, Windows on Node 20.x and 22.x)
+- [x] Add GitHub CodeQL static application security analysis workflow `.github/workflows/codeql.yml` (JS/TS & Python) — 0 alerts (run 39463385096)
+- [x] Add Gitleaks secret scanning workflow `.github/workflows/secret-scanning.yml` & `.gitleaks.toml` — 0 leaks (run 39463385058)
+- [x] Configure Dependabot in `.github/dependabot.yml` for npm (root & website), GitHub Actions, and pip
+- [x] Validate package integrity, isolated consumer installation, CLI execution, and SPDX SBOM generation (`npm sbom --sbom-format=spdx`)
+- [x] Configure gated GitHub Packages publish workflow `.github/workflows/publish.yml` for `@priyanshu2007-cmd/bisectpilot`
+- [x] Enforce master-only branch policy with full offline backup bundle preserved
 
 ## P2 — Deferred Post-Release Items
 - [ ] P2.1: Optional OpenTelemetry Collector OTLP exporter (W3C traceparent and Prometheus /metrics exist)
 - [ ] P2.2: Website workspace / package-scope indicator in Explorer specimen
 - [ ] P2.3: Deeper native Windows process-tree (`taskkill.exe`) and daemon recovery tests
 - [ ] P2.4: Open-source community files (CHANGELOG, CONTRIBUTING, issue templates, npm provenance preparation)
+
