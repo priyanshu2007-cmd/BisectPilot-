@@ -61,4 +61,4 @@
 - Cached classifications are reused only for exact commit SHAs recorded by an accepted ledger event; a previously executed command is not treated as a classification.
 - Resume verifies worktree ownership, config hash and overlay hashes; mismatches stop with an error rather than altering good/bad bounds.
 - Daemon restart never auto-resumes or marks interrupted sessions successful.
-- **Not guaranteed:** survival of power loss or storage failure (no explicit fsync of checkpoint data/directory).
+- Checkpoint writes call `fsyncSync` on the temporary checkpoint file and, on POSIX, on the containing directory after the atomic rename. This protects against process crashes and improves OS/power-loss durability; filesystem hardware, storage failures, and platforms without reliable directory flush support remain outside the guarantee, with backup/WAL recovery still used when possible.

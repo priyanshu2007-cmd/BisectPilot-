@@ -42,6 +42,33 @@ BisectPilot/
 - `application/` (`LocalBisectEngine`) coordinates the end-to-end investigation workflow and implements `BisectEngine`.
 - Tests verify contracts against temporary Git repositories, isolated sub-processes, and simulated environments.
 
+## 2.1. How a User Request Flows Through the System
+
+The normal investigation path is intentionally sequential:
+
+1. `src/cli/` parses the command and loads a validated `BisectConfigV1`.
+2. `src/config/` normalizes paths, hashes configuration, and applies deterministic
+   environment defaults.
+3. `src/application/` runs doctor/preflight checks, resolves good and bad refs,
+   creates the guarded worktree, and coordinates the investigation.
+4. `src/git/` and `src/worktree/` inspect history and isolate all checkout,
+   reset, and bisect state from the user's primary checkout.
+5. `src/oracle/` invokes the configured command through `src/process/`, applying
+   timeout, cancellation, output, noisy-sampling, benchmark, and optional
+   sandbox policies.
+6. `src/ledger/` records each observation in the append-only hash chain while
+   `src/session/` persists checkpoints and recovery metadata.
+7. `src/runner/` connects the stable oracle boundary to native `git bisect run`.
+8. `src/reports/` verifies and projects the evidence into JSON, Markdown, HTML,
+   GitHub summaries, and reproducible scripts.
+
+The daemon and worker path reuses the same engine rather than implementing a
+second classification algorithm: `src/jobs/` owns durable queue state,
+`src/daemon/` owns authenticated scheduling, and `src/worker/` owns outbound
+polling plus pre-provisioned repository validation. The website is a separate
+static Next.js application that consumes deterministic sample data or an
+explicitly imported CLI JSON report.
+
 ## 3. Daemon & Pull Worker Architecture (Step 9)
 
 - `src/jobs/` stores one atomic JSON snapshot under the daemon state directory. A single transition function rejects illegal job states. Delivery is at-least-once; attempt identities and duplicate-result handling prevent stale workers from overwriting newer results.
@@ -102,7 +129,7 @@ BisectPilot/
 - **Fast Resume Semantics:** `LocalBisectEngine.resume()` re-establishes native `git bisect run` with `bisect-runner`, which short-circuits any revision already classified in the checkpoint cache. Completed tests are never re-executed.
 - **`needs_recovery` Lifecycle:**
   - Sessions whose owner process PID is dead while the lockfile remains held transition to `needs_recovery`.
-  - Resume requires explicit user action (`bisectpilot bisect --resume <sessionId>` or `bisectpilot daemon recover <jobId>`).
+  - Resume requires explicit user action (`bisectpilot resume <sessionId>` or `bisectpilot daemon recover <jobId>`).
 - **Blocked Recovery Conditions:** Resumption is strictly blocked if:
   1. Another active process is currently holding the session lock (PID is alive).
   2. The target repository does not match the checkpoint's `commonGitDir` or root commit SHA.
