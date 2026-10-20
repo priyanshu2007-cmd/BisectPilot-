@@ -18,7 +18,6 @@ behavior change back to the first turn where two runs stopped agreeing.
   a small client component for filtering, tab changes, replay, and copy feedback.
 - **Data:** deterministic sample data and client-side CLI report importation; no external API or secret is required.
 
-
 ## Design direction
 
 The visual language is a dark laboratory field notebook rather than a generic SaaS
@@ -40,6 +39,21 @@ cp .env.example .env.local
 ```
 
 `NEXT_PUBLIC_SITE_URL` is optional and defaults to `http://localhost:3000`.
+
+The site does not need the root engine to render its sample data, but building a
+fresh CLI report lets you verify the import path end to end:
+
+```bash
+cd ..
+npm ci
+npm run build
+node dist/src/index.js report <sessionId> --json --out website/public/example-report.json
+cd website
+```
+
+Only import reports from repositories and sessions you are authorized to share.
+The explorer validates the report shape before displaying it; it does not upload
+the file to a server.
 
 ## Run locally
 
@@ -66,6 +80,20 @@ It runs, in order:
 The checks do not call external APIs and can be rerun offline after dependencies
 have been installed with `npm ci`.
 
+For a manual browser check, confirm that:
+
+1. `/` renders the landing page and replay console.
+2. `/explorer` can switch replay tabs, filter events, and show copy feedback.
+3. The report-import control accepts a valid local JSON report and rejects an
+   invalid shape without crashing the page.
+4. `/docs`, `/sitemap.xml`, and `/robots.txt` load successfully.
+5. Browser developer tools show no unexpected console errors or external API
+   requests.
+
+If Python Playwright or an equivalent browser harness is unavailable, the
+production build still verifies static rendering, type safety, and lint rules;
+interactive behavior remains an explicit manual or browser-harness check.
+
 For a production-style local run:
 
 ```bash
@@ -90,3 +118,12 @@ canonical metadata, `robots.txt`, and `sitemap.xml` use the deployed origin.
 
 No deployment command is included because deployment changes a real account and
 requires an explicit provider choice and approval.
+
+## Website debugging checklist
+
+- Start with `npm run typecheck`, then `npm run lint`, then `npm run build`.
+- Check the browser console and the route that reproduces the issue.
+- For imported reports, validate the JSON shape and use a small fixture before
+  trying a large session artifact.
+- Keep `NEXT_PUBLIC_SITE_URL` limited to the public origin; never place private
+  keys in `NEXT_PUBLIC_*` variables because they are client-visible.
