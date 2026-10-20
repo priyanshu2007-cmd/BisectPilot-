@@ -1,4 +1,4 @@
-name: Publish to GitHub Packages
+name: Publish Package
 
 on:
   release:
@@ -13,14 +13,19 @@ on:
         required: true
         type: boolean
         default: false
+      registry:
+        description: "Target registry ('npm' or 'github')"
+        required: false
+        default: "github"
 
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   validate-and-publish:
-    name: Validate and Publish to GitHub Packages
+    name: Validate and Publish Package
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -51,29 +56,15 @@ jobs:
           npm run test:py
           node --test dist/tests/integration/package-distribution.test.js
 
-      - name: Verify package version and registry status
+      - name: Verify package version and metadata
         id: check-version
         run: |
           PKG_NAME=$(node -p "require('./package.json').name")
           PKG_VERSION=$(node -p "require('./package.json').version")
           echo "Package name: $PKG_NAME"
           echo "Package version: $PKG_VERSION"
-          echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
-          echo "pkg_version=$PKG_VERSION" >> $GITHUB_OUTPUT
-
-          # Verify package name matches GitHub Packages scope requirement
-          if [[ "$PKG_NAME" != "@priyanshu2007-cmd/"* ]]; then
-            echo "Error: Package name $PKG_NAME must be scoped to @priyanshu2007-cmd for GitHub Packages."
-            exit 1
-          fi
-
-          # Check if version already exists on GitHub Packages
-          EXISTS=$(npm view "$PKG_NAME@$PKG_VERSION" version --registry=https://npm.pkg.github.com 2>/dev/null || echo "not_found")
-          if [ "$EXISTS" = "$PKG_VERSION" ]; then
-            echo "Error: Version $PKG_VERSION of $PKG_NAME is already published to GitHub Packages."
-            exit 1
-          fi
-          echo "Version $PKG_VERSION is available for publication."
+          echo "pkg_name=$PKG_NAME" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Validate package tarball and consumer installation
         run: |
@@ -87,19 +78,32 @@ jobs:
           CONSUMER_DIR=$(mktemp -d)
           cd "$CONSUMER_DIR"
           npm init -y
-          npm install "$(dirname "$CONSUMER_DIR")/$TARBALL" || npm install "$GITHUB_WORKSPACE/$TARBALL"
+          npm install "$GITHUB_WORKSPACE/$TARBALL"
           npx bisectpilot --help
+          npx bisectpilot --version
 
       - name: Publish to GitHub Packages
+        if: ${{ github.event.inputs.registry != 'npm' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Dry run requested. Executing npm publish --dry-run..."
+            echo "Dry run requested for GitHub Packages. Executing npm publish --dry-run..."
             npm publish --dry-run
           else
-            echo "Publishing ${{ steps.check-version.outputs.pkg_name }}@${{ steps.check-version.outputs.pkg_version }} to https://npm.pkg.github.com..."
+            echo "Publishing to GitHub Packages..."
             npm publish
-            echo "Published successfully to https://npm.pkg.github.com"
-            echo "View package at: https://github.com/users/priyanshu2007-cmd/packages?repo_name=BisectPilot-"
+          fi
+
+      - name: Publish to npm Registry
+        if: ${{ github.event.inputs.registry == 'npm' && env.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "Dry run requested for npm. Executing npm publish --dry-run..."
+            npm publish --registry=https://registry.npmjs.org --provenance --access public --dry-run
+          else
+            echo "Publishing to npm registry with provenance..."
+            npm publish --registry=https://registry.npmjs.org --provenance --access public
           fi

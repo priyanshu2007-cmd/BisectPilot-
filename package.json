@@ -48,5 +48,20 @@
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "git",
+    "bisect",
+    "git-bisect",
+    "regression",
+    "debugging",
+    "ci",
+    "testing",
+    "automated-bisection",
+    "local-first"
+  ],
+  "homepage": "https://github.com/priyanshu2007-cmd/BisectPilot-#readme",
+  "bugs": {
+    "url": "https://github.com/priyanshu2007-cmd/BisectPilot-/issues"
+  }
 }
