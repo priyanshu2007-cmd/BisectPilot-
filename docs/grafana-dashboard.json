@@ -1,0 +1,136 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "BisectPilot Fleet & Session Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "title": "Active Bisection Sessions",
+      "type": "stat",
+      "targets": [{ "expr": "bisectpilot_active_sessions", "legendFormat": "Active Sessions", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "title": "Sessions Requiring Recovery",
+      "type": "stat",
+      "targets": [{ "expr": "bisectpilot_recovery_required_sessions_total", "legendFormat": "Needs Recovery", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "title": "Fleet Concurrency (Capacity vs Utilized)",
+      "type": "stat",
+      "targets": [
+        { "expr": "bisectpilot_worker_concurrency_capacity", "legendFormat": "Total Capacity", "refId": "A" },
+        { "expr": "bisectpilot_worker_concurrency_utilized", "legendFormat": "Utilized Slots", "refId": "B" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "id": 5,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "title": "Stale Results Rejected",
+      "type": "stat",
+      "targets": [{ "expr": "sum(bisectpilot_stale_results_rejected_total)", "legendFormat": "Rejected Results", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "id": 6,
+      "title": "Queue Depth & Active Leases",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "bisectpilot_queue_depth", "legendFormat": "Queue State: {{state}}", "refId": "A" },
+        { "expr": "bisectpilot_active_leases", "legendFormat": "Active Leases", "refId": "B" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "id": 7,
+      "title": "Sample Processing Rate by Outcome",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(bisectpilot_samples_total[1m])", "legendFormat": "{{type}} - {{outcome}}", "refId": "A" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "id": 8,
+      "title": "Worker Heartbeat & Disconnection Rates",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(bisectpilot_worker_disconnections_total[1m])", "legendFormat": "Worker Disconnections/sec", "refId": "A" },
+        { "expr": "rate(bisectpilot_lease_expirations_total[1m])", "legendFormat": "Lease Expirations/sec", "refId": "B" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "id": 9,
+      "title": "Bisection Session Execution Duration",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(bisectpilot_session_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95 Duration", "refId": "A" },
+        { "expr": "histogram_quantile(0.50, sum(rate(bisectpilot_session_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50 Duration", "refId": "B" }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["bisectpilot", "fleet", "bisection"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": { "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"] },
+  "timezone": "browser",
+  "title": "BisectPilot Fleet Telemetry",
+  "version": 1
+}
