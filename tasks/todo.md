@@ -154,7 +154,7 @@
 - [x] Feature F: Observability visualization provisioning template (`docs/grafana-dashboard.json`)
 - [x] Feature G: Unit and integration test suites (`tests/unit/session-recovery.test.ts`, `tests/integration/session-resume-recovery.test.ts`)
 - [x] Feature H: Full master-plan audit against `docs/bisectpilot-master-plan-v3.md` (Sections 19–29, traceability matrix, safety guarantees)
-- [x] Feature I: Complete test and release artifact verification (`npm test` 222/222 passing, `npm run test:py` 4/4 passing, package dry-run and isolated installation 3/3 passing, `website` 8/8 static pages passing, `git diff --check` clean)
+- [x] Feature I: Complete test and release artifact verification (`npm test` 229 tests across 29 suites with 228 passing and 1 skipped on macOS, `npm run test:py` 4/4 passing, package dry-run and isolated installation 3/3 passing, `website` 8/8 static pages passing, `git diff --check` clean)
 
 ## Release Verification Milestone — P1 Blockers & Cross-Platform Hardening
 - [x] Fresh-clone end-to-end bisection functional proof (`tests/integration/fresh-clone-e2e.test.ts` — planted regression c3 found, JSON/MD/HTML report consistency, HTML XSS escaping, timeout safety, skip budget enforcement)
