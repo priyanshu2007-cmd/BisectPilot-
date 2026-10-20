@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { resolveCommonGitDir } from "../adapters/git/git-client.js";
 import {
   isValidStateTransition,
   TERMINAL_SESSION_STATES,
@@ -31,6 +32,31 @@ export * from "./checkpoint.js";
 
 const MANIFEST_FILENAME = "manifest.json";
 const LOCK_FILENAME = "session.lock";
+export const LEDGER_FILENAME = "ledger.jsonl";
+
+export async function resolveSessionRoot(
+  explicit?: string,
+  cwd: string = process.cwd()
+): Promise<string> {
+  if (explicit && explicit.trim()) {
+    return path.resolve(explicit.trim());
+  }
+  const env = process.env.BISECTPILOT_SESSION_ROOT;
+  if (env && env.trim()) {
+    return path.resolve(env.trim());
+  }
+  try {
+    const commonGitDir = await resolveCommonGitDir(cwd);
+    const repoRoot = path.basename(commonGitDir) === ".git" ? path.dirname(commonGitDir) : commonGitDir;
+    return path.resolve(repoRoot, ".bisectpilot", "sessions");
+  } catch {
+    return path.resolve(cwd, ".bisectpilot", "sessions");
+  }
+}
+
+export function getLedgerPath(sessionDir: string): string {
+  return path.join(sessionDir, LEDGER_FILENAME);
+}
 
 export function getManifestPath(sessionDir: string): string {
   return path.join(sessionDir, MANIFEST_FILENAME);
@@ -53,7 +79,7 @@ export function readSessionManifest(sessionDir: string): SessionManifestV1 {
   if (!existsSync(target)) {
     try {
       const { checkpoint } = readSessionCheckpoint(sessionDir);
-      const ledgerPath = path.join(sessionDir, "events.jsonl");
+      const ledgerPath = getLedgerPath(sessionDir);
       const reconstructed = checkpointToManifest(checkpoint, sessionDir, ledgerPath);
       writeSessionManifestAtomic(reconstructed);
       return reconstructed;
@@ -62,15 +88,33 @@ export function readSessionManifest(sessionDir: string): SessionManifestV1 {
     }
   }
   try {
-    const parsed = JSON.parse(readFileSync(target, "utf-8")) as SessionManifestV1;
+    let parsed = JSON.parse(readFileSync(target, "utf-8")) as SessionManifestV1;
     if (parsed.schemaVersion !== 1 || typeof parsed.id !== "string" || !parsed.repository?.worktreePath) {
       throw new Error(`Invalid or corrupted session manifest at ${target}`);
+    }
+    if (
+      typeof parsed.ledgerPath === "string" &&
+      parsed.ledgerPath.endsWith("events.jsonl") &&
+      !existsSync(parsed.ledgerPath)
+    ) {
+      const correctLedgerPath = getLedgerPath(sessionDir);
+      if (existsSync(correctLedgerPath)) {
+        parsed = {
+          ...parsed,
+          ledgerPath: correctLedgerPath,
+        };
+        try {
+          writeSessionManifestAtomic(parsed);
+        } catch {
+          // ignore write errors
+        }
+      }
     }
     return parsed;
   } catch (err) {
     try {
       const { checkpoint } = readSessionCheckpoint(sessionDir);
-      const ledgerPath = path.join(sessionDir, "events.jsonl");
+      const ledgerPath = getLedgerPath(sessionDir);
       const reconstructed = checkpointToManifest(checkpoint, sessionDir, ledgerPath);
       writeSessionManifestAtomic(reconstructed);
       return reconstructed;
@@ -218,6 +262,14 @@ export function detectCrashNeedsRecovery(
       manifest,
       "needs_recovery",
       `Detected non-terminal state "${manifest.state}" with stale lock from dead PID ${lockInfo.holder?.pid ?? "unknown"}`,
+      onEvent
+    );
+  }
+  if (manifest.state === "bisect_running" && lockInfo.status === "unlocked") {
+    return transitionSessionState(
+      manifest,
+      "needs_recovery",
+      `Detected state "bisect_running" with no live lock; recovery required`,
       onEvent
     );
   }

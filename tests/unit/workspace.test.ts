@@ -233,6 +233,6 @@ test("Repro Script Generation with Workspace Subdirectory", () => {
 
   const script = generateReproScript(fakeManifest);
   assert.ok(script.includes('# Target Workspace: packages/api'));
-  assert.ok(script.includes('cd "$TMP_WT/packages/api"'));
+  assert.ok(script.includes('cd "$TMP_WT"/\'packages/api\''));
   assert.ok(script.includes("'npm' 'test'"));
 });

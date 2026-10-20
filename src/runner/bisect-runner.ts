@@ -13,7 +13,10 @@ import {
 } from "../session/index.js";
 import { resetOwnedWorktree } from "../worktree/index.js";
 
-export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1 | 125 | 128> {
+export async function executeSingleBisectStep(
+  sessionDir: string,
+  abortSignal?: AbortSignal
+): Promise<0 | 1 | 125 | 128> {
   let manifest;
   try {
     manifest = readSessionManifest(sessionDir);
@@ -51,6 +54,10 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
     return 128;
   }
 
+  if (abortSignal?.aborted) {
+    return 128;
+  }
+
   const outcome = await evaluateCheckedOutRevision({
     sessionId: manifest.id,
     sessionDir: manifest.sessionDir,
@@ -61,6 +68,7 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
     overlayHashes: manifest.overlayHashes,
     phasePrefix: "oracle",
     benchmarkBaseline: manifest.benchmarkBaseline,
+    abortSignal,
   });
 
   try {
@@ -70,6 +78,10 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
     });
   } catch (err) {
     console.error(`[bisect-runner] resetOwnedWorktree failed after eval (${currentSha}):`, err);
+    return 128;
+  }
+
+  if (outcome.kind === "abort" || abortSignal?.aborted) {
     return 128;
   }
 
@@ -89,7 +101,7 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
       sessionDir,
       {
         commitSha: currentSha,
-        classification: outcome.kind === "good" ? "good" : outcome.kind === "bad" ? "bad" : outcome.kind === "skip" ? "skip" : "abort",
+        classification: outcome.kind === "good" ? "good" : outcome.kind === "bad" ? "bad" : "skip",
         reasonCode: outcome.reasonCode,
         gitExitCode: outcome.gitExitCode,
         detail: outcome.detail,
@@ -131,12 +143,25 @@ if (isEntrypoint()) {
     console.error("[bisect-runner] Missing required --session-dir argument");
     process.exit(128);
   }
-  executeSingleBisectStep(sessionDir)
+  const abortController = new AbortController();
+  const onSignal = () => {
+    abortController.abort();
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  process.on("SIGHUP", onSignal);
+
+  executeSingleBisectStep(sessionDir, abortController.signal)
     .then((code) => {
       process.exit(code);
     })
     .catch((err) => {
       console.error("[bisect-runner] Uncaught fatal error in executeSingleBisectStep:", err);
       process.exit(128);
+    })
+    .finally(() => {
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
+      process.off("SIGHUP", onSignal);
     });
 }

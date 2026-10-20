@@ -159,6 +159,7 @@ async function runAndRecordStep(params: {
       ...(result.stdoutBytes !== undefined ? { stdoutBytes: result.stdoutBytes } : {}),
       ...(result.stderrBytes !== undefined ? { stderrBytes: result.stderrBytes } : {}),
       ...(result.terminationSignalSent ? { terminationSignalSent: result.terminationSignalSent } : {}),
+      ...(result.orphanedProcessesKilled ? { orphanedProcessesKilled: true } : {}),
       stdoutPreview: result.stdout.slice(0, 512),
       stderrPreview: result.stderr.slice(0, 512),
       ...(result.sandbox

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import type {
   CleanupOptions,
@@ -7,7 +8,7 @@ import type {
   SessionStatusReport,
   StartSessionOptions,
 } from "../contracts/index.js";
-import { appendLedgerEvent, readLedgerEvents, verifyLedgerChain } from "../ledger/index.js";
+import { appendLedgerEvent, readLedgerEvents, verifyLedgerFile } from "../ledger/index.js";
 import { writeSessionReportArtifacts } from "../reports/index.js";
 import {
   detectCrashNeedsRecovery,
@@ -17,6 +18,7 @@ import {
   releaseSessionLock,
   syncCheckpointWithWal,
   transitionSessionState,
+  resolveSessionRoot,
   writeSessionManifestAtomic,
 } from "../session/index.js";
 import { removeOwnedWorktree, verifyWorktreeOwnership } from "../worktree/index.js";
@@ -78,6 +80,11 @@ export async function concludeSession(
   }
 
   const events = readLedgerEvents(next.ledgerPath);
+  const finalChainHash = events.length > 0 ? events[events.length - 1]!.eventHash : undefined;
+  if (finalChainHash) {
+    next = { ...next, finalChainHash };
+    writeSessionManifestAtomic(next);
+  }
   writeSessionReportArtifacts({
     manifest: next,
     events,
@@ -85,6 +92,7 @@ export async function concludeSession(
   });
 
   if (options?.autoCleanup) {
+    releaseSessionLock(next.sessionDir);
     await cleanupSession(next.id, { dryRun: false }, path.dirname(next.sessionDir));
     next = readSessionManifest(next.sessionDir);
   }
@@ -94,11 +102,10 @@ export async function concludeSession(
 export async function cleanupSession(
   sessionId: string,
   options?: CleanupOptions,
-  sessionRootDir?: string
+  sessionRootDir?: string,
+  cwd?: string
 ): Promise<CleanupResult> {
-  const baseDir = sessionRootDir
-    ? path.resolve(sessionRootDir)
-    : path.resolve(".bisectpilot", "sessions");
+  const baseDir = await resolveSessionRoot(sessionRootDir, cwd);
   const sessionDir = path.join(baseDir, sessionId);
   let manifest = readSessionManifest(sessionDir);
   const dryRun = Boolean(options?.dryRun);
@@ -113,6 +120,13 @@ export async function cleanupSession(
       state: manifest.state,
       detail: `Dry-run verified ownership of ${manifest.repository.worktreePath}`,
     };
+  }
+
+  const lockInfo = inspectSessionLock(sessionDir);
+  if (lockInfo.status === "locked_live") {
+    throw new Error(
+      `Session ${sessionId} is running (PID ${lockInfo.holder?.pid ?? "unknown"}); stop it first`
+    );
   }
 
   manifest = transitionSessionState(manifest, "cleanup_running", "Cleaning up session worktree");
@@ -147,17 +161,16 @@ export async function cleanupSession(
 
 export async function statusSession(
   sessionId: string,
-  sessionRootDir?: string
+  sessionRootDir?: string,
+  cwd?: string
 ): Promise<SessionStatusReport> {
-  const baseDir = sessionRootDir
-    ? path.resolve(sessionRootDir)
-    : path.resolve(".bisectpilot", "sessions");
+  const baseDir = await resolveSessionRoot(sessionRootDir, cwd);
   const sessionDir = path.join(baseDir, sessionId);
   let manifest = readSessionManifest(sessionDir);
   manifest = detectCrashNeedsRecovery(manifest);
   const lockInfo = inspectSessionLock(sessionDir);
-  const events = readLedgerEvents(manifest.ledgerPath);
-  const chain = verifyLedgerChain(events);
+  const events = existsSync(manifest.ledgerPath) ? readLedgerEvents(manifest.ledgerPath) : [];
+  const chain = verifyLedgerFile(manifest.ledgerPath);
 
   let checkpointInfo;
   try {
@@ -167,7 +180,11 @@ export async function statusSession(
       lastWalSeq: cp.lastWalSeq,
       classifiedCount: Object.keys(cp.classifications).length,
       searchPhase: cp.searchPhase,
-      resumable: manifest.state === "needs_recovery" || manifest.state === "paused" || manifest.state === "bisect_running",
+      resumable:
+        lockInfo.status !== "locked_live" &&
+        (manifest.state === "needs_recovery" ||
+          manifest.state === "paused" ||
+          manifest.state === "bisect_running"),
     };
   } catch {
     // Non-fatal
@@ -183,9 +200,7 @@ export async function statusSession(
   };
 }
 
-export async function listSessions(sessionRootDir?: string): Promise<readonly SessionManifestV1[]> {
-  const baseDir = sessionRootDir
-    ? path.resolve(sessionRootDir)
-    : path.resolve(".bisectpilot", "sessions");
+export async function listSessions(sessionRootDir?: string, cwd?: string): Promise<readonly SessionManifestV1[]> {
+  const baseDir = await resolveSessionRoot(sessionRootDir, cwd);
   return listSessionManifests(baseDir);
 }

@@ -94,6 +94,7 @@ export interface ProcessExitedEvent extends LedgerEventBase {
   readonly stdoutPreview: string;
   readonly stderrPreview: string;
   readonly sandbox?: SandboxLedgerEvidence;
+  readonly orphanedProcessesKilled?: boolean;
 }
 
 export interface SandboxCreatedEvent extends LedgerEventBase {
@@ -185,6 +186,13 @@ export interface SessionConcludedEvent extends LedgerEventBase {
   readonly conclusion: SessionConclusion;
 }
 
+export interface LedgerRepairedEvent extends LedgerEventBase {
+  readonly type: "ledger_repaired";
+  readonly action: "torn_tail_truncated";
+  readonly bytesTruncated?: number;
+  readonly detail?: string;
+}
+
 export type LedgerEvent =
   | SessionCreatedEvent
   | StateTransitionEvent
@@ -194,6 +202,7 @@ export type LedgerEvent =
   | RevisionClassifiedEvent
   | BoundaryCheckEvent
   | CleanupStepEvent
+  | LedgerRepairedEvent
   | SessionConcludedEvent;
 
 export type LedgerEventInput =
@@ -205,6 +214,7 @@ export type LedgerEventInput =
   | Omit<RevisionClassifiedEvent, "schemaVersion" | "seq" | "timestamp" | "prevHash" | "eventHash">
   | Omit<BoundaryCheckEvent, "schemaVersion" | "seq" | "timestamp" | "prevHash" | "eventHash">
   | Omit<CleanupStepEvent, "schemaVersion" | "seq" | "timestamp" | "prevHash" | "eventHash">
+  | Omit<LedgerRepairedEvent, "schemaVersion" | "seq" | "timestamp" | "prevHash" | "eventHash">
   | Omit<SessionConcludedEvent, "schemaVersion" | "seq" | "timestamp" | "prevHash" | "eventHash">;
 
 export const GENESIS_PREV_HASH = "0000000000000000000000000000000000000000000000000000000000000000";

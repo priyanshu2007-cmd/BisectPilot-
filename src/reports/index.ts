@@ -48,6 +48,7 @@ export interface SessionJsonReportV1 {
   readonly skippedShas: readonly string[];
   readonly explanation: string;
   readonly overlayHashes: Readonly<Record<string, string>>;
+  readonly finalChainHash?: string;
   readonly deterministicEnvironment: Readonly<Record<string, string>>;
   readonly evaluations: ReadonlyArray<{
     readonly commitSha: string;
@@ -162,6 +163,11 @@ export function generateJsonReport(
       : {}),
     ...(effectivePathScope ? { pathScope: effectivePathScope } : {}),
     ...(benchmarkSummary ? { benchmark: benchmarkSummary } : {}),
+    ...(events.length > 0
+      ? { finalChainHash: events[events.length - 1]!.eventHash }
+      : manifest.finalChainHash
+      ? { finalChainHash: manifest.finalChainHash }
+      : {}),
     limitations: [
       "A Git worktree isolates working files and bisect refs, not OS-level processes or network access.",
       "Non-monotonic commit histories may contain multiple transitions; boundary verification confirms the reported pair.",
@@ -297,6 +303,7 @@ export function generateMarkdownReport(
       ? [`- **Suspected ${badLabel} Commit:** \`${jsonReport.candidateSha}\``]
       : []),
     ...(jsonReport.parentSha ? [`- **Verified Good Parent:** \`${jsonReport.parentSha}\``] : []),
+    ...(jsonReport.finalChainHash ? [`- **Final Chain Hash:** \`${jsonReport.finalChainHash}\``] : []),
     `- **Summary:** ${jsonReport.explanation}`,
     ...(jsonReport.benchmark
       ? [
@@ -347,26 +354,102 @@ export function generateReproScript(manifest: SessionManifestV1): string {
     manifest.config.oracle.mode === "overlay" && manifest.config.oracle.overlayFiles
       ? manifest.config.oracle.overlayFiles.map(
           (rel) =>
-            `mkdir -p "$(dirname "$TMP_WT/${rel}")" && cp ${shQuote(path.join(manifest.sessionDir, "overlays", rel))} "$TMP_WT/${rel}"`
+            `mkdir -p "$(dirname "$TMP_WT"/${shQuote(rel)})" && cp ${shQuote(path.join(manifest.sessionDir, "overlays", rel))} "$TMP_WT"/${shQuote(rel)}`
         )
       : [];
   const overlayRemoveCommands =
     manifest.config.oracle.mode === "overlay" && manifest.config.oracle.overlayFiles
-      ? manifest.config.oracle.overlayFiles.map((rel) => `rm -f "$TMP_WT/${rel}"`)
+      ? manifest.config.oracle.overlayFiles.map((rel) => `rm -f "$TMP_WT"/${shQuote(rel)}`)
       : [];
 
   const workDirRel =
     manifest.config.workingDirectory && manifest.config.workingDirectory !== "."
       ? manifest.config.workingDirectory.replace(/\\/g, "/").replace(/^\.\//, "")
       : "";
-  const cdTarget = workDirRel ? `"$TMP_WT/${workDirRel}"` : `"$TMP_WT"`;
+  const cdTarget = workDirRel ? `"$TMP_WT"/${shQuote(workDirRel)}` : `"$TMP_WT"`;
+
+  const isPerformance = manifest.config.profile === "performance";
+  const isNoisy = Boolean(manifest.config.execution?.noisyOracle?.enabled);
+
+  const headerNotes: string[] = [];
+  if (isNoisy) {
+    headerNotes.push("# Note: This session used noisy sampling (--noisy); a single run may disagree due to flakiness.");
+  }
+  if (isPerformance) {
+    headerNotes.push("# Note: Performance profile session. Compare these numbers; the verdict needs statistics, see report.");
+  }
+
+  const executionSteps = isPerformance
+    ? [
+        'echo "Checking out parent commit $PARENT_SHA in isolated worktree..." >&2',
+        'git -C "$REPO_ROOT" worktree add --detach "$TMP_WT" "$PARENT_SHA" >/dev/null',
+        ...overlayCopyCommands,
+        'echo "=== Parent ($PARENT_SHA) Output ==="',
+        `(cd ${cdTarget} && ${oracleCmd}) || true`,
+        ...overlayRemoveCommands,
+        "",
+        'echo "Checking out candidate commit $CANDIDATE_SHA in isolated worktree..." >&2',
+        'git -C "$TMP_WT" checkout --detach "$CANDIDATE_SHA" >/dev/null',
+        ...overlayCopyCommands,
+        'echo "=== Candidate ($CANDIDATE_SHA) Output ==="',
+        `(cd ${cdTarget} && ${oracleCmd}) || true`,
+        ...overlayRemoveCommands,
+        "",
+        "# 4. Final outcome contract: performance sessions require statistical evaluation",
+        'echo "compare these numbers; the verdict needs statistics, see report"',
+        "exit 0",
+        "",
+      ]
+    : [
+        'echo "Checking out parent commit $PARENT_SHA in isolated worktree..." >&2',
+        'git -C "$REPO_ROOT" worktree add --detach "$TMP_WT" "$PARENT_SHA" >/dev/null',
+        ...overlayCopyCommands,
+        'PARENT_STATUS=0',
+        `(cd ${cdTarget} && ${oracleCmd} >/dev/null 2>&1) || PARENT_STATUS=$?`,
+        'if [ "$PARENT_STATUS" -eq 0 ]; then',
+        '  PARENT_RES="good"',
+        'elif [ "$PARENT_STATUS" -eq 125 ]; then',
+        '  PARENT_RES="skip"',
+        'else',
+        '  PARENT_RES="bad"',
+        'fi',
+        ...overlayRemoveCommands,
+        "",
+        'echo "Checking out candidate commit $CANDIDATE_SHA in isolated worktree..." >&2',
+        'git -C "$TMP_WT" checkout --detach "$CANDIDATE_SHA" >/dev/null',
+        ...overlayCopyCommands,
+        'CANDIDATE_STATUS=0',
+        `(cd ${cdTarget} && ${oracleCmd} >/dev/null 2>&1) || CANDIDATE_STATUS=$?`,
+        'if [ "$CANDIDATE_STATUS" -eq 0 ]; then',
+        '  CANDIDATE_RES="good"',
+        'elif [ "$CANDIDATE_STATUS" -eq 125 ]; then',
+        '  CANDIDATE_RES="skip"',
+        'else',
+        '  CANDIDATE_RES="bad"',
+        'fi',
+        ...overlayRemoveCommands,
+        "",
+        "# 4. Final outcome contract: parent: <result>, candidate: <result>",
+        'echo "parent: ${PARENT_RES}, candidate: ${CANDIDATE_RES}"',
+        'if [ "$PARENT_RES" = "skip" ] || [ "$CANDIDATE_RES" = "skip" ]; then',
+        '  echo "Error: One or both revisions were skipped (exit code 125)." >&2',
+        '  exit 2',
+        'fi',
+        'if [ "$PARENT_RES" = "good" ] && [ "$CANDIDATE_RES" = "bad" ]; then',
+        '  exit 0',
+        'else',
+        '  exit 1',
+        'fi',
+        "",
+      ];
 
   return [
     "#!/usr/bin/env bash",
     "# ==============================================================================",
     `# BisectPilot Standalone Reproducibility Script — Session ${manifest.id}`,
     "# Generated for automated regression reproduction without altering caller state",
-    ...(workDirRel ? [`# Target Workspace: ${manifest.config.workingDirectory}`] : []),
+    ...(workDirRel ? [`# Target Workspace: ${manifest.config.workingDirectory.replace(/[\r\n]+/g, " ")}`] : []),
+    ...headerNotes,
     `# Reference Ledger: ${manifest.ledgerPath}`,
     `# Reference Report: ${path.join(manifest.sessionDir, "report.json")}`,
     "# ==============================================================================",
@@ -415,26 +498,7 @@ export function generateReproScript(manifest: SessionManifestV1): string {
     '}',
     'trap cleanup EXIT',
     "",
-    'echo "Checking out parent commit $PARENT_SHA in isolated worktree..." >&2',
-    'git -C "$REPO_ROOT" worktree add --detach "$TMP_WT" "$PARENT_SHA" >/dev/null',
-    ...overlayCopyCommands,
-    `if (cd ${cdTarget} && ${oracleCmd} >/dev/null 2>&1); then PARENT_RES="good"; else PARENT_RES="bad"; fi`,
-    ...overlayRemoveCommands,
-    "",
-    'echo "Checking out candidate commit $CANDIDATE_SHA in isolated worktree..." >&2',
-    'git -C "$TMP_WT" checkout --detach "$CANDIDATE_SHA" >/dev/null',
-    ...overlayCopyCommands,
-    `if (cd ${cdTarget} && ${oracleCmd} >/dev/null 2>&1); then CANDIDATE_RES="good"; else CANDIDATE_RES="bad"; fi`,
-    ...overlayRemoveCommands,
-    "",
-    "# 4. Final outcome contract: parent: <result>, candidate: <result>",
-    'echo "parent: ${PARENT_RES}, candidate: ${CANDIDATE_RES}"',
-    'if [ "$PARENT_RES" = "good" ] && [ "$CANDIDATE_RES" = "bad" ]; then',
-    '  exit 0',
-    'else',
-    '  exit 1',
-    'fi',
-    "",
+    ...executionSteps,
   ].join("\n");
 }
 

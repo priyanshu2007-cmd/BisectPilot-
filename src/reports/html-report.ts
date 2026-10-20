@@ -421,6 +421,16 @@ export function generateHtmlReport(
           <div class="metric-sub">Hash-chained cryptographic audit</div>
         </div>
         ${
+          jsonReport.finalChainHash
+            ? `
+        <div class="metric-tile">
+          <div class="metric-label">Final Chain Hash</div>
+          <div class="metric-value"><code style="font-size:0.75rem">${escapeHtml(jsonReport.finalChainHash.slice(0, 12))}...</code> <button class="btn-copy-small" data-copy="${escapeHtml(jsonReport.finalChainHash)}" title="Copy Full Hash">📋</button></div>
+          <div class="metric-sub">External tamper anchor</div>
+        </div>`
+            : ""
+        }
+        ${
           jsonReport.benchmark
             ? `
         <div class="metric-tile">

@@ -14,7 +14,7 @@ import {
   type ContainerSandboxPolicy,
   type RegressionProfile,
 } from "../config/index.js";
-import { readLedgerEvents, verifyLedgerChain } from "../ledger/index.js";
+import { readLedgerEvents, verifyLedgerFile } from "../ledger/index.js";
 import {
   appendGitHubStepSummary,
   generateGitHubIssueMarkdown,
@@ -29,9 +29,6 @@ import {
   formatMinimizationReportMarkdown,
   type MinimizerGranularity,
 } from "../domain/minimizer.js";
-import { enqueueBisectJob, runDaemonCommand } from "../daemon/cli.js";
-import { defaultDaemonStateDir } from "../daemon/index.js";
-import { runWorkerCommand } from "../worker/cli.js";
 import { runGit } from "../git/index.js";
 
 
@@ -175,6 +172,7 @@ export const CLI_OPTION_TABLES: Readonly<Record<string, CliOptionTable>> = {
     "session-root": { type: "string" },
     out: { type: "string" },
     verify: { type: "boolean" },
+    "expect-hash": { type: "string" },
     "github-summary": { type: "boolean" },
     "github-issue": { type: "boolean" },
     html: { type: "boolean" },
@@ -710,6 +708,7 @@ export async function runCli(
 
   if (cmd === "daemon") {
     try {
+      const { runDaemonCommand } = await import("../daemon/cli.js");
       return await runDaemonCommand(args.slice(1), engine);
     } catch (error: unknown) {
       process.stderr.write(`${(error as Error).message}\n`);
@@ -718,6 +717,7 @@ export async function runCli(
   }
   if (cmd === "worker") {
     try {
+      const { runWorkerCommand } = await import("../worker/cli.js");
       return await runWorkerCommand(args.slice(1), engine);
     } catch (error: unknown) {
       process.stderr.write(`${(error as Error).message}\n`);
@@ -938,6 +938,8 @@ export async function runCli(
       return 3;
     }
     if (parsed.values.background) {
+      const { defaultDaemonStateDir } = await import("../daemon/index.js");
+      const { enqueueBisectJob } = await import("../daemon/cli.js");
       const stateDir = path.resolve(
         (parsed.values["daemon-state-dir"] as string | undefined) ?? defaultDaemonStateDir()
       );
@@ -993,7 +995,11 @@ export async function runCli(
     }
     const sessionRoot = parsed.values["session-root"] as string | undefined;
     const abortController = new AbortController();
-    const onSig = () => abortController.abort();
+    let interruptedBySignal = false;
+    const onSig = () => {
+      interruptedBySignal = true;
+      abortController.abort();
+    };
     process.once("SIGINT", onSig);
     process.once("SIGTERM", onSig);
     try {
@@ -1007,7 +1013,13 @@ export async function runCli(
       } else {
         process.stdout.write(await formatSessionSummary(manifest));
       }
-      return manifest.conclusion?.outcome === "candidate_confirmed" ? 0 : 1;
+      return manifest.conclusion?.outcome === "candidate_confirmed" ? 0 : (interruptedBySignal ? 130 : 1);
+    } catch (err: unknown) {
+      if (interruptedBySignal) {
+        process.stderr.write("Session interrupted by signal\n");
+        return 130;
+      }
+      throw err;
     } finally {
       process.removeListener("SIGINT", onSig);
       process.removeListener("SIGTERM", onSig);
@@ -1029,7 +1041,11 @@ export async function runCli(
       : [];
 
     if (parsed.values.verify) {
-      const check = verifyLedgerChain(events);
+      const expectedHash = parsed.values["expect-hash"] as string | undefined;
+      const check = verifyLedgerFile(
+        status.manifest.ledgerPath,
+        expectedHash ? { expectedLastHash: expectedHash } : undefined
+      );
       if (!check.valid) {
         process.stderr.write(`Ledger verification failed: ${check.reason}\n`);
         return 1;

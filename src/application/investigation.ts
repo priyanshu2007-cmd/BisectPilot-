@@ -297,12 +297,14 @@ export async function executeInvestigationFromWorktreeReady(
     }
   }
 
-  manifest = transitionSessionState(
-    manifest,
-    "bisect_running",
-    "Starting native git bisect in session worktree",
-    options?.onEvent
-  );
+  if (manifest.state !== "bisect_running") {
+    manifest = transitionSessionState(
+      manifest,
+      "bisect_running",
+      "Starting native git bisect in session worktree",
+      options?.onEvent
+    );
+  }
 
   const worktreePath = manifest.repository.worktreePath;
   await runGit(["bisect", "reset"], worktreePath).catch(() => undefined);
@@ -343,8 +345,19 @@ export async function executeInvestigationFromWorktreeReady(
     const execPathArg = process.execPath.replace(/\\/g, "/");
     runRes = await runGit(
       ["bisect", "run", execPathArg, runnerScript, "--session-dir", sessionDirArg],
-      worktreePath
+      worktreePath,
+      { signal: options?.abortSignal }
     );
+  }
+
+  if (options?.abortSignal?.aborted) {
+    manifest = transitionSessionState(
+      manifest,
+      "paused",
+      "interrupted by signal",
+      options?.onEvent
+    );
+    return manifest;
   }
 
   manifest = {

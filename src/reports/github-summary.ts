@@ -74,6 +74,7 @@ export function generateGitHubStepSummary(
         ? `✅ Hash chain verified (${events.length} events)`
         : `⚠️ Verification failed (${ledgerCheck.reason})`
     } |`,
+    ...(jsonReport.finalChainHash ? [`| **Final Chain Hash** | \`${jsonReport.finalChainHash}\` |`] : []),
     "",
     `**Summary:** ${jsonReport.explanation}`,
     "",
@@ -162,6 +163,7 @@ export function generateGitHubIssueMarkdown(
       ? [`- **Path Scope:** ${manifest.config.pathScope.map((p) => `\`${p}\``).join(", ")}`]
       : []),
     `- **Oracle Command:** \`${manifest.config.oracle.command.command} ${manifest.config.oracle.command.args.join(" ")}\``,
+    ...(jsonReport.finalChainHash ? [`- **Final Chain Hash:** \`${jsonReport.finalChainHash}\` |`].map(s => s.replace(" |", "")) : []),
     `- **Explanation:** ${jsonReport.explanation}`,
     "",
     "### Bisection Timeline & Evidence",

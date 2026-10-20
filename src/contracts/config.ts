@@ -191,6 +191,7 @@ const SANDBOX_IMAGE_PATTERN = /^[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$/;
 const SANDBOX_SECRET_ENV_PATTERN = /(TOKEN|SECRET|PASSWORD|PRIVATE_KEY|AWS_|GCP_|AZURE_|API_KEY)/i;
 
 function isSafeRelativePath(value: string): boolean {
+  if (/[\x00-\x1f\x7f]/.test(value)) return false;
   const normalized = value.trim().replaceAll("\\", "/");
   if (normalized.length === 0 || normalized.includes("\0") || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized)) return false;
   let depth = 0;
@@ -299,7 +300,9 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
   }
   const rawWorkingDir = typeof obj.workingDirectory === "string" ? obj.workingDirectory : ".";
   let workingDirectory = ".";
-  if (typeof obj.repositoryRoot === "string" && obj.repositoryRoot.trim().length > 0) {
+  if (typeof obj.workingDirectory === "string" && /[\x00-\x1f\x7f]/.test(obj.workingDirectory)) {
+    issues.push({ path: "workingDirectory", message: "workingDirectory cannot contain control characters or newlines" });
+  } else if (typeof obj.repositoryRoot === "string" && obj.repositoryRoot.trim().length > 0) {
     const wsVal = validateWorkspacePath(obj.repositoryRoot, rawWorkingDir);
     if (!wsVal.ok) {
       issues.push({ path: "workingDirectory", message: wsVal.error ?? "Invalid workspace path" });

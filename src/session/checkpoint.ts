@@ -154,7 +154,8 @@ export function reconstructCheckpointFromWal(sessionDir: string): SessionCheckpo
       else if (ev.to === "boundary_verifying") searchPhase = "boundary_check";
       else if (ev.to === "concluded" || TERMINAL_SESSION_STATES.has(ev.to)) searchPhase = "concluded";
     } else if (ev.type === "revision_classified") {
-      classifications[ev.commitSha] = {
+      if (ev.classification !== "abort") {
+        classifications[ev.commitSha] = {
         commitSha: ev.commitSha,
         classification: ev.classification,
         reasonCode: ev.reasonCode,
@@ -165,6 +166,7 @@ export function reconstructCheckpointFromWal(sessionDir: string): SessionCheckpo
         benchmark: ev.benchmark,
         classifiedAt: ev.timestamp,
       };
+      }
       if (!testedRevisions.includes(ev.commitSha)) {
         testedRevisions.push(ev.commitSha);
       }
@@ -265,7 +267,8 @@ export function syncCheckpointWithWal(sessionDir: string): SessionCheckpointV1 {
       else if (ev.to === "boundary_verifying") searchPhase = "boundary_check";
       else if (ev.to === "concluded" || TERMINAL_SESSION_STATES.has(ev.to)) searchPhase = "concluded";
     } else if (ev.type === "revision_classified") {
-      classifications[ev.commitSha] = {
+      if (ev.classification !== "abort") {
+        classifications[ev.commitSha] = {
         commitSha: ev.commitSha,
         classification: ev.classification,
         reasonCode: ev.reasonCode,
@@ -275,6 +278,7 @@ export function syncCheckpointWithWal(sessionDir: string): SessionCheckpointV1 {
         benchmark: ev.benchmark,
         classifiedAt: ev.timestamp,
       };
+      }
       if (!testedRevisions.includes(ev.commitSha)) {
         testedRevisions.push(ev.commitSha);
       }
@@ -312,10 +316,13 @@ export function recordRevisionClassificationCheckpoint(
   walSeq: number
 ): SessionCheckpointV1 {
   const current = syncCheckpointWithWal(sessionDir);
-  const classifications = {
-    ...current.classifications,
-    [record.commitSha]: record,
-  };
+  const classifications =
+    record.classification === "abort"
+      ? current.classifications
+      : {
+          ...current.classifications,
+          [record.commitSha]: record,
+        };
   const testedRevisions = current.testedRevisions.includes(record.commitSha)
     ? current.testedRevisions
     : [...current.testedRevisions, record.commitSha];

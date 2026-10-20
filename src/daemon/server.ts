@@ -29,6 +29,7 @@ import type {
 import {
   detectCrashNeedsRecovery,
   listSessionManifests,
+  resolveSessionRoot,
   TERMINAL_SESSION_STATES,
 } from "../session/index.js";
 import {
@@ -256,10 +257,8 @@ export class DaemonService {
     });
   }
 
-  recoverActiveSessions(sessionRootDir?: string): number {
-    const baseDir = sessionRootDir
-      ? path.resolve(sessionRootDir)
-      : path.resolve(process.env.BISECTPILOT_SESSION_ROOT ?? ".bisectpilot/sessions");
+  async recoverActiveSessions(sessionRootDir?: string): Promise<number> {
+    const baseDir = await resolveSessionRoot(sessionRootDir);
     if (!existsSync(baseDir)) return 0;
     let recoveredCount = 0;
     try {
@@ -294,7 +293,7 @@ export class DaemonService {
       this.token = readProtectedToken(config.tokenFile);
       mkdirSync(this.stateDir, { recursive: true, mode: 0o700 });
       this.queue.recoverAfterDaemonRestart(this.now());
-      this.recoverActiveSessions();
+      await this.recoverActiveSessions();
       const startedAt = this.now().toISOString();
       this.state = this.buildState(config, "starting", startedAt);
       this.persistState(this.state);

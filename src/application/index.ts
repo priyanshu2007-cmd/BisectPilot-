@@ -28,8 +28,10 @@ import {
 import {
   acquireSessionLock,
   detectCrashNeedsRecovery,
+  getLedgerPath,
   readSessionManifest,
   releaseSessionLock,
+  resolveSessionRoot,
   syncCheckpointWithWal,
   TERMINAL_SESSION_STATES,
   transitionSessionState,
@@ -84,10 +86,10 @@ export class LocalBisectEngine implements BisectEngine {
       throw new Error(`Cannot start bisection plan: ${planReport.warnings.join("; ") || "invalid bounds"}`);
     }
     const sessionId = options?.sessionId ?? `bp-${randomUUID().slice(0, 8)}`;
-    const sessionsBase = defaultSessionRootDir(planReport.repoRoot, config.sessionRootDir);
+    const sessionsBase = await resolveSessionRoot(config.sessionRootDir, planReport.repoRoot);
     const sessionDir = path.join(sessionsBase, sessionId);
     const worktreeDir = path.join(sessionDir, "worktree");
-    const ledgerPath = path.join(sessionDir, "ledger.jsonl");
+    const ledgerPath = getLedgerPath(sessionDir);
 
     mkdirSync(sessionDir, { recursive: true });
     acquireSessionLock(sessionDir);
@@ -200,22 +202,31 @@ export class LocalBisectEngine implements BisectEngine {
       manifest = transitionSessionState(manifest, "worktree_ready", "Detached session worktree ready", options?.onEvent);
       return await executeInvestigationFromWorktreeReady(manifest, options, this.sandboxRuntimeExecutor);
     } finally {
+      if (options?.abortSignal?.aborted) {
+        try {
+          const m = readSessionManifest(sessionDir);
+          if (m.state === "bisect_running") {
+            transitionSessionState(m, "paused", "interrupted by signal", options?.onEvent);
+          }
+        } catch {
+          // ignore
+        }
+      }
       releaseSessionLock(sessionDir);
     }
   }
 
-  async status(sessionId: string, sessionRootDir?: string): Promise<SessionStatusReport> {
-    return statusSession(sessionId, sessionRootDir);
+  async status(sessionId: string, sessionRootDir?: string, cwd?: string): Promise<SessionStatusReport> {
+    return statusSession(sessionId, sessionRootDir, cwd);
   }
 
   async resume(
     sessionId: string,
     options?: StartSessionOptions,
-    sessionRootDir?: string
+    sessionRootDir?: string,
+    cwd?: string
   ): Promise<SessionManifestV1> {
-    const baseDir = sessionRootDir
-      ? path.resolve(sessionRootDir)
-      : path.resolve(process.env.BISECTPILOT_SESSION_ROOT ?? ".bisectpilot/sessions");
+    const baseDir = await resolveSessionRoot(sessionRootDir, cwd);
     const sessionDir = path.join(baseDir, sessionId);
     let manifest = readSessionManifest(sessionDir);
     manifest = detectCrashNeedsRecovery(manifest, options?.onEvent);
@@ -266,6 +277,16 @@ export class LocalBisectEngine implements BisectEngine {
         this.sandboxRuntimeExecutor
       );
     } finally {
+      if (options?.abortSignal?.aborted) {
+        try {
+          const m = readSessionManifest(sessionDir);
+          if (m.state === "bisect_running") {
+            transitionSessionState(m, "paused", "interrupted by signal", options?.onEvent);
+          }
+        } catch {
+          // ignore
+        }
+      }
       releaseSessionLock(sessionDir);
     }
   }
@@ -273,13 +294,14 @@ export class LocalBisectEngine implements BisectEngine {
   async cleanup(
     sessionId: string,
     options?: CleanupOptions,
-    sessionRootDir?: string
+    sessionRootDir?: string,
+    cwd?: string
   ): Promise<CleanupResult> {
-    return cleanupSession(sessionId, options, sessionRootDir);
+    return cleanupSession(sessionId, options, sessionRootDir, cwd);
   }
 
-  async list(sessionRootDir?: string): Promise<readonly SessionManifestV1[]> {
-    return listSessions(sessionRootDir);
+  async list(sessionRootDir?: string, cwd?: string): Promise<readonly SessionManifestV1[]> {
+    return listSessions(sessionRootDir, cwd);
   }
 
   async minimize(config: MinimizeConfig): Promise<MinimizeResult> {

@@ -12,10 +12,15 @@ export interface GitExecResult {
   readonly stderr: string;
 }
 
-export async function runGit(args: readonly string[], cwd?: string): Promise<GitExecResult> {
+export async function runGit(
+  args: readonly string[],
+  cwd?: string,
+  options?: { signal?: AbortSignal }
+): Promise<GitExecResult> {
   try {
     const { stdout, stderr } = await execFileAsync("git", [...args], {
       cwd,
+      signal: options?.signal,
       env: {
         PATH: process.env.PATH ?? process.env.Path ?? "/usr/bin:/bin:/usr/local/bin",
         HOME: process.env.HOME ?? process.env.USERPROFILE ?? "",

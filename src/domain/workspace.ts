@@ -58,6 +58,14 @@ export function validateWorkspacePath(
       error: "Workspace path cannot be empty",
     };
   }
+  if (/[\x00-\x1f\x7f]/.test(cwdInput)) {
+    return {
+      ok: false,
+      relativePath: ".",
+      absolutePath: path.resolve(repoRoot),
+      error: "Workspace path cannot contain control characters or newlines",
+    };
+  }
 
   const trimmed = cwdInput.trim();
   const resolvedRepo = path.resolve(repoRoot);

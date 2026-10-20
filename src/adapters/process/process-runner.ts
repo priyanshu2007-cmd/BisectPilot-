@@ -67,6 +67,7 @@ export interface ProcessRunResult {
   readonly sandbox?: SandboxMetadata;
   readonly sandboxFailureCode?: SandboxFailureCode;
   readonly sandboxFailureMessage?: string;
+  readonly orphanedProcessesKilled?: boolean;
 }
 
 export function terminateProcessTree(
@@ -285,10 +286,55 @@ export async function runSafeProcess(options: ProcessRunOptions): Promise<Proces
       }
     });
 
+    let recordedExitCode: number | null = null;
+    let recordedSignal: NodeJS.Signals | string | null = null;
+    let orphanedProcessesKilled = false;
+    let drainTimer: NodeJS.Timeout | undefined;
+
+    const cleanupOrphansAndDrain = (code: number | null, signal: NodeJS.Signals | string | null) => {
+      recordedExitCode = code;
+      recordedSignal = signal;
+      clearTimeout(timeoutTimer);
+
+      if (child.pid !== undefined) {
+        if (isPosix) {
+          let hasOrphans = false;
+          try {
+            process.kill(-child.pid, 0);
+            hasOrphans = true;
+          } catch {
+            hasOrphans = false;
+          }
+
+          if (hasOrphans) {
+            orphanedProcessesKilled = true;
+            terminateProcessTree(child.pid, Math.min(graceMs, 1000), recordSignal);
+          }
+        } else {
+          try {
+            const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+              shell: false,
+              stdio: "ignore",
+            });
+            killer.on("error", () => undefined);
+            killer.unref();
+          } catch {
+            // Ignore
+          }
+        }
+      }
+
+      drainTimer = setTimeout(() => {
+        finalize(recordedExitCode, recordedSignal);
+      }, 1500);
+      drainTimer.unref();
+    };
+
     const finalize = (exitCode: number | null, signal: NodeJS.Signals | string | null) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutTimer);
+      if (drainTimer) clearTimeout(drainTimer);
       options.abortSignal?.removeEventListener("abort", onAbort);
 
       if (isPosix && child.pid !== undefined && (timedOut || cancelled)) {
@@ -318,6 +364,7 @@ export async function runSafeProcess(options: ProcessRunOptions): Promise<Proces
         truncatedStderr,
         stdoutSha256: stdoutHash.digest("hex"),
         stderrSha256: stderrHash.digest("hex"),
+        ...(orphanedProcessesKilled ? { orphanedProcessesKilled: true } : {}),
       });
     };
 
@@ -327,8 +374,16 @@ export async function runSafeProcess(options: ProcessRunOptions): Promise<Proces
       finalize(null, null);
     });
 
+    child.on("exit", (code, signal) => {
+      if (settled) return;
+      if (!timedOut && !cancelled) {
+        cleanupOrphansAndDrain(code, signal);
+      }
+    });
+
     child.on("close", (code, signal) => {
-      finalize(code, signal);
+      if (drainTimer) clearTimeout(drainTimer);
+      finalize(recordedExitCode ?? code, recordedSignal ?? signal);
     });
   });
 }

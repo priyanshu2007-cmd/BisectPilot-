@@ -89,10 +89,10 @@ export interface BisectEngine {
   doctor(repoPath?: string): Promise<DoctorReport>;
   plan(config: BisectConfigV1): Promise<BisectPlanReport>;
   start(config: BisectConfigV1, options?: StartSessionOptions): Promise<SessionManifestV1>;
-  status(sessionId: string, sessionRootDir?: string): Promise<SessionStatusReport>;
-  resume(sessionId: string, options?: StartSessionOptions, sessionRootDir?: string): Promise<SessionManifestV1>;
-  cleanup(sessionId: string, options?: CleanupOptions, sessionRootDir?: string): Promise<CleanupResult>;
-  list(sessionRootDir?: string): Promise<readonly SessionManifestV1[]>;
+  status(sessionId: string, sessionRootDir?: string, cwd?: string): Promise<SessionStatusReport>;
+  resume(sessionId: string, options?: StartSessionOptions, sessionRootDir?: string, cwd?: string): Promise<SessionManifestV1>;
+  cleanup(sessionId: string, options?: CleanupOptions, sessionRootDir?: string, cwd?: string): Promise<CleanupResult>;
+  list(sessionRootDir?: string, cwd?: string): Promise<readonly SessionManifestV1[]>;
 }
 
 /**

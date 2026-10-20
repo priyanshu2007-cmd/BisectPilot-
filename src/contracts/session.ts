@@ -109,6 +109,7 @@ export interface SessionManifestV1 {
   readonly testedRevisions: readonly string[];
   readonly lastRecordedRevision?: string;
   readonly runnerVersion: string;
+  readonly finalChainHash?: string;
   readonly conclusion?: SessionConclusion;
   readonly benchmarkBaseline?: BenchmarkStats;
 }
