@@ -276,7 +276,11 @@ bisectpilot start \
   --yes
 ```
 
-`start` prints the final `SessionManifestV1` JSON, including the session `id` (for example, `bp-a1b2c3d4`), `state`, and `conclusion` (`candidateSha`, `outcome`, `explanation`).
+By default, `start` prints a human-readable summary and sends live progress to stderr. Use `--json` when a script needs the final `SessionManifestV1` JSON, including the session `id` (for example, `bp-a1b2c3d4`), `state`, and `conclusion` (`candidateSha`, `outcome`, `explanation`):
+
+```bash
+bisectpilot start --config bisectpilot.config.json --yes --json
+```
 
 ### 5. Inspect session status and generate reports
 
@@ -305,6 +309,9 @@ If a run was interrupted, resume it from its last checkpoint; when finished, rem
 ```bash
 # Resume an interrupted session without re-running classified commits
 bisectpilot resume <SESSION_ID>
+
+# Emit the final session manifest for automation
+bisectpilot resume <SESSION_ID> --json
 
 # Preview worktree cleanup without deleting files
 bisectpilot cleanup <SESSION_ID> --dry-run

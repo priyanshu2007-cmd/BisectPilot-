@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { LocalBisectEngine } from "../application/index.js";
-import type { BisectEngine } from "../contracts/index.js";
+import type { BisectEngine, LedgerEvent, SessionManifestV1 } from "../contracts/index.js";
 import {
   DEFAULT_EXECUTION_POLICY,
   loadConfigFromFile,
@@ -22,6 +22,7 @@ import {
   generateHtmlReport,
   generateJsonReport,
   generateMarkdownReport,
+  redactSensitiveText,
 } from "../reports/index.js";
 import {
   formatMinimizationReportJson,
@@ -31,6 +32,7 @@ import {
 import { enqueueBisectJob, runDaemonCommand } from "../daemon/cli.js";
 import { defaultDaemonStateDir } from "../daemon/index.js";
 import { runWorkerCommand } from "../worker/cli.js";
+import { runGit } from "../git/index.js";
 
 
 const HELP_TEXT = `BisectPilot — Local-First Git Regression Bisection Engine
@@ -39,7 +41,7 @@ Commands:
   doctor     Check Git and repository prerequisites.
   init       Write a starter JSON configuration.
   plan       Validate bounds and estimate a run; use -- <command> for zero-config mode.
-  start/run  Execute a bisection; use --yes -- <command> [args...] and optional --prompt.
+  start/run  Execute a bisection; use --yes -- <command> [args...] and optional --prompt/--json.
   status     Inspect a session and recovery metadata.
   resume     Resume an interrupted session.
   report     Export Markdown, JSON, HTML, or GitHub reports.
@@ -63,9 +65,9 @@ const COMMAND_HELP: Readonly<Record<string, string>> = {
   doctor: `Usage: bisectpilot doctor [repoPath]\n\nCheck Git and repository prerequisites.\n\nFlags: -h, --help  Show this help.\nExamples:\n  bisectpilot doctor .\n`,
   init: `Usage: bisectpilot init [--out <file>] [--force]\n\nWrite a starter configuration using safe defaults.\n\nFlags: --out <file>  Output path (default: bisectpilot.config.json).\n       --force       Overwrite an existing file.\nExamples:\n  bisectpilot init\n  bisectpilot init --out bisectpilot.config.json --force\n`,
   plan: `Usage: bisectpilot plan [--config <file>] --good <ref> --bad <ref> -- <command> [args...]\n\nValidate bounds and estimate a bisection without executing repository code.\n\nFlags: --config <file>  Load a config; inline command overrides oracle.command.\n       --good <ref>     Known-good ref (auto is supported).\n       --bad <ref>      Known-bad ref.\n       --timeout <ms>   Inline oracle timeout (default: 180000).\nExamples:\n  bisectpilot plan --good v1.0 --bad HEAD -- npm test\n  bisectpilot plan --config bisectpilot.config.json -- node check.js\n`,
-  start: `Usage: bisectpilot start [options] -- <command> [args...]\n       bisectpilot run [options] -- <command> [args...]\n\nRun endpoint checks, native Git Bisect, and boundary confirmation.\n\nFlags: --config <file>  Load a config; inline command overrides oracle.command.\n       --good <ref>     Known-good ref (required without --config).\n       --bad <ref>      Known-bad ref (required without --config).\n       --yes             Consent to execute historical repository code.\n       --timeout <ms>   Inline oracle timeout (default: 180000).\n       --prompt          Ask for interactive classification.\n       --noisy           Enable noisy-oracle sampling.\n       --background      Enqueue through the optional daemon.\nExamples:\n  bisectpilot start --good v1.0 --bad HEAD --yes -- npm test\n  bisectpilot start --good auto --bad HEAD --yes -- ./scripts/check.sh --fast\n`,
+  start: `Usage: bisectpilot start [options] -- <command> [args...]\n       bisectpilot run [options] -- <command> [args...]\n\nRun endpoint checks, native Git Bisect, and boundary confirmation.\n\nFlags: --config <file>  Load a config; inline command overrides oracle.command.\n       --good <ref>     Known-good ref (required without --config).\n       --bad <ref>      Known-bad ref (required without --config).\n       --yes             Consent to execute historical repository code.\n       --timeout <ms>   Inline oracle timeout (default: 180000).\n       --prompt          Ask for interactive classification.\n       --noisy           Enable noisy-oracle sampling.\n       --background      Enqueue through the optional daemon.\n       --json            Print the final session manifest as JSON.\nExamples:\n  bisectpilot start --good v1.0 --bad HEAD --yes -- npm test\n  bisectpilot start --good auto --bad HEAD --yes -- ./scripts/check.sh --fast\n`,
   status: `Usage: bisectpilot status <sessionId> [--session-root <dir>]\n\nInspect session state, lock status, and checkpoint metadata.\n\nFlags: --session-root <dir>  Override the session root.\n\n${RECOVERY_HELP}`,
-  resume: `Usage: bisectpilot resume <sessionId> [--session-root <dir>]\n\nResume an interrupted or recoverable session.\n\nFlags: --session-root <dir>  Override the session root.\n\n${RECOVERY_HELP}`,
+  resume: `Usage: bisectpilot resume <sessionId> [--session-root <dir>]\n\nResume an interrupted or recoverable session.\n\nFlags: --session-root <dir>  Override the session root.\n       --json                 Print the final session manifest as JSON.\n\n${RECOVERY_HELP}`,
   report: `Usage: bisectpilot report <sessionId> [format flags]\n\nExport session evidence. Markdown is the default format.\n\nFlags: --json, --html, --github-issue, --github-summary [file], --out <file>, --verify.\nExamples:\n  bisectpilot report bp-123 --json --verify\n  bisectpilot report bp-123 --html --out report.html\n`,
   cleanup: `Usage: bisectpilot cleanup <sessionId> [--dry-run]\n\nRemove the tool-owned session worktree.\n\nFlags: --dry-run  Preview cleanup without removing files.\nExample:\n  bisectpilot cleanup bp-123 --dry-run\n`,
   list: `Usage: bisectpilot list [--session-root <dir>]\n\nList recorded sessions.\n\nFlags: --session-root <dir>  Override the session root.\nExample:\n  bisectpilot list\n`,
@@ -125,9 +127,10 @@ export const CLI_OPTION_TABLES: Readonly<Record<string, CliOptionTable>> = {
     "github-summary": { type: "boolean" },
     "daemon-state-dir": { type: "string" },
     "repository-key": { type: "string" },
+    json: { type: "boolean" },
   },
   status: { ...GLOBAL_OPTIONS, "session-root": { type: "string" } },
-  resume: { ...GLOBAL_OPTIONS, "session-root": { type: "string" } },
+  resume: { ...GLOBAL_OPTIONS, "session-root": { type: "string" }, json: { type: "boolean" } },
   report: {
     ...GLOBAL_OPTIONS,
     "session-root": { type: "string" },
@@ -478,6 +481,88 @@ function createInlineConfig(
   };
 }
 
+function supportsColor(stream: NodeJS.WriteStream): boolean {
+  return Boolean(stream.isTTY) && process.env.NO_COLOR === undefined;
+}
+
+function resultMarker(ok: boolean, stream: NodeJS.WriteStream): string {
+  const marker = ok ? "OK" : "FAIL";
+  if (!supportsColor(stream)) return marker;
+  return `${ok ? "\u001b[32m" : "\u001b[31m"}${marker}\u001b[0m`;
+}
+
+function shortSha(sha: string): string {
+  return sha.slice(0, 8);
+}
+
+async function getCommitSubject(repoRoot: string, sha: string): Promise<string | undefined> {
+  const result = await runGit(["log", "-1", "--format=%s", sha], repoRoot);
+  if (result.exitCode !== 0 || !result.stdout.trim()) return undefined;
+  return redactSensitiveText(result.stdout.trim().split("\n", 1)[0]!);
+}
+
+async function formatCommitSummary(
+  manifest: SessionManifestV1,
+  label: string,
+  sha: string
+): Promise<string> {
+  const subject = await getCommitSubject(manifest.repository.rootPath, sha);
+  return `${label}: ${shortSha(sha)}${subject ? ` — ${subject}` : ""}`;
+}
+
+async function formatSessionSummary(manifest: SessionManifestV1): Promise<string> {
+  const conclusion = manifest.conclusion;
+  const outcome = conclusion?.outcome ?? manifest.state;
+  const successful = outcome === "candidate_confirmed";
+  const lines = [
+    `Session: ${manifest.id}`,
+    `Result: ${resultMarker(successful, process.stdout)}`,
+    `State: ${manifest.state}`,
+    `Outcome: ${outcome}`,
+  ];
+
+  if (conclusion?.candidateSha) {
+    lines.push(await formatCommitSummary(manifest, "Candidate", conclusion.candidateSha));
+  }
+  if (conclusion?.parentSha) {
+    lines.push(await formatCommitSummary(manifest, "Parent", conclusion.parentSha));
+  }
+  if (conclusion?.candidateRangeShas?.length) {
+    lines.push(`Candidate range: ${conclusion.candidateRangeShas.map(shortSha).join(", ")}`);
+  }
+
+  lines.push(
+    `Evaluated revisions: ${manifest.testedRevisions.length}`,
+    `Skipped revisions: ${conclusion?.skippedShas.length ?? manifest.skipCount}`,
+    `Summary: ${redactSensitiveText(conclusion?.explanation ?? "Session in progress.")}`
+  );
+  return lines.join("\n") + "\n";
+}
+
+function writeProgressEvent(event: LedgerEvent): void {
+  let detail: string | undefined;
+  switch (event.type) {
+    case "session_created":
+      detail = `session ${event.sessionId} created`;
+      break;
+    case "transition":
+      detail = `state ${event.from} -> ${event.to}`;
+      break;
+    case "revision_classified":
+      detail = `revision ${shortSha(event.commitSha)} classified ${event.classification}`;
+      break;
+    case "boundary_check":
+      detail = `${event.target} boundary ${event.passedRuns}/${event.totalRuns} passed`;
+      break;
+    case "session_concluded":
+      detail = `session concluded as ${event.conclusion.outcome}`;
+      break;
+    default:
+      break;
+  }
+  if (detail) process.stderr.write(`[progress] ${detail}\n`);
+}
+
 export async function runCli(
   argv: readonly string[],
   engineOverride?: BisectEngine
@@ -806,8 +891,13 @@ export async function runCli(
       const manifest = await engine.start(activeConfig, {
         confirm: () => autoYes,
         abortSignal: abortController.signal,
+        onEvent: writeProgressEvent,
       });
-      process.stdout.write(JSON.stringify(manifest, null, 2) + "\n");
+      if (args.includes("--json")) {
+        process.stdout.write(JSON.stringify(manifest, null, 2) + "\n");
+      } else {
+        process.stdout.write(await formatSessionSummary(manifest));
+      }
       return manifest.conclusion?.outcome === "candidate_confirmed" ? 0 : 1;
     } finally {
       process.removeListener("SIGINT", onSig);
@@ -843,10 +933,14 @@ export async function runCli(
     try {
       const manifest = await engine.resume(
         sessionId,
-        { abortSignal: abortController.signal },
+        { abortSignal: abortController.signal, onEvent: writeProgressEvent },
         sessionRoot
       );
-      process.stdout.write(JSON.stringify(manifest, null, 2) + "\n");
+      if (args.includes("--json")) {
+        process.stdout.write(JSON.stringify(manifest, null, 2) + "\n");
+      } else {
+        process.stdout.write(await formatSessionSummary(manifest));
+      }
       return manifest.conclusion?.outcome === "candidate_confirmed" ? 0 : 1;
     } finally {
       process.removeListener("SIGINT", onSig);

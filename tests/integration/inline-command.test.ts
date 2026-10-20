@@ -39,6 +39,7 @@ test("inline start bisects a fixture repository without a config file", async ()
       "--bad",
       fixture.commitShas[2]!,
       "--yes",
+      "--json",
       "--",
       "node",
       "check.js",
