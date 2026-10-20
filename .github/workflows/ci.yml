@@ -33,6 +33,7 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git config --global init.defaultBranch main
+          git config --global core.autocrlf false
 
       - name: Check git diff formatting and whitespace
         run: git diff --check

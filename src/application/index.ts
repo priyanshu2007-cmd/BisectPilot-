@@ -30,6 +30,7 @@ import {
   resolveRepoRoot,
   runGit,
   runGitDoctor,
+  type GitExecResult,
 } from "../git/index.js";
 import { appendLedgerEvent, readLedgerEvents, verifyLedgerChain } from "../ledger/index.js";
 import {
@@ -165,9 +166,15 @@ async function runEndpointKTimes(params: {
 
 function parseFirstBadShaFromBisectOutput(output: string, termNew = "bad"): string | undefined {
   const escapedTerm = termNew.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(`\\b([0-9a-f]{40}) is the first (?:${escapedTerm}|bad) commit\\b`, "i");
-  const match = regex.exec(output);
-  return match ? match[1]!.toLowerCase() : undefined;
+  const regex1 = new RegExp(`\\b([0-9a-f]{40}) is the first (?:${escapedTerm}|bad) commit\\b`, "i");
+  const match1 = regex1.exec(output);
+  if (match1) return match1[1]!.toLowerCase();
+
+  const regex2 = new RegExp(`# first (?:${escapedTerm}|bad) commit:\\s*\\[([0-9a-f]{40})\\]`, "i");
+  const match2 = regex2.exec(output);
+  if (match2) return match2[1]!.toLowerCase();
+
+  return undefined;
 }
 
 export class LocalBisectEngine implements BisectEngine {
@@ -910,11 +917,18 @@ export class LocalBisectEngine implements BisectEngine {
       );
     }
 
-    const runnerScript = resolveRunnerScriptPath();
-    const runRes = await runGit(
-      ["bisect", "run", process.execPath, runnerScript, "--session-dir", manifest.sessionDir],
-      worktreePath
-    );
+    let candidateSha = parseFirstBadShaFromBisectOutput(startRes.stdout, manifest.config.terms?.new);
+    let runRes: GitExecResult | undefined;
+
+    if (!candidateSha) {
+      const runnerScript = resolveRunnerScriptPath().replace(/\\/g, "/");
+      const sessionDirArg = manifest.sessionDir.replace(/\\/g, "/");
+      const execPathArg = process.execPath.replace(/\\/g, "/");
+      runRes = await runGit(
+        ["bisect", "run", execPathArg, runnerScript, "--session-dir", sessionDirArg],
+        worktreePath
+      );
+    }
 
     manifest = {
       ...readSessionManifest(manifest.sessionDir),
@@ -947,7 +961,7 @@ export class LocalBisectEngine implements BisectEngine {
     }
 
     const abortedEvent = classifiedEvents.find((e) => e.classification === "abort");
-    if (abortedEvent || runRes.exitCode >= 128) {
+    if (abortedEvent || (runRes && runRes.exitCode >= 128)) {
       return this.concludeSession(
         manifest,
         {
@@ -955,15 +969,17 @@ export class LocalBisectEngine implements BisectEngine {
           skippedShas,
           explanation: abortedEvent
             ? `Bisect aborted at ${abortedEvent.commitSha.slice(0, 8)} (${abortedEvent.reasonCode}): ${abortedEvent.detail}`
-            : `git bisect run aborted (exit ${runRes.exitCode}): ${runRes.stderr || runRes.stdout}`,
+            : `git bisect run aborted (exit ${runRes?.exitCode}): ${runRes?.stderr || runRes?.stdout}`,
         },
         options,
         bisectLogRes.stdout
       );
     }
 
-    const combinedOutput = `${runRes.stdout}\n${bisectLogRes.stdout}`;
-    const candidateSha = parseFirstBadShaFromBisectOutput(combinedOutput, manifest.config.terms?.new);
+    const combinedOutput = `${startRes.stdout}\n${runRes?.stdout ?? ""}\n${bisectLogRes.stdout}`;
+    if (!candidateSha) {
+      candidateSha = parseFirstBadShaFromBisectOutput(combinedOutput, manifest.config.terms?.new);
+    }
 
     if (!candidateSha) {
       if (skippedShas.length > 0) {
@@ -984,7 +1000,7 @@ export class LocalBisectEngine implements BisectEngine {
         {
           outcome: "aborted",
           skippedShas,
-          explanation: `Could not parse first bad commit from git bisect output: ${runRes.stdout}`,
+          explanation: `Could not parse first bad commit from git bisect output: ${runRes?.stdout ?? startRes.stdout}`,
         },
         options,
         bisectLogRes.stdout
@@ -1049,6 +1065,9 @@ export class LocalBisectEngine implements BisectEngine {
     options?: StartSessionOptions,
     bisectLogText?: string
   ): Promise<SessionManifestV1> {
+    if (conclusion.outcome === "aborted") {
+      console.error(`[BisectEngine] Session ${manifest.id} ABORTED: ${conclusion.explanation}`);
+    }
     let next = transitionSessionState(
       manifest,
       "concluded",

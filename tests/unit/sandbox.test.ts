@@ -152,6 +152,10 @@ describe("Step 10 — rootless container sandbox", () => {
   });
 
   it("runs only with verified rootless restrictions and owned cleanup", async () => {
+    if (process.platform === "win32") {
+      // Rootless container sandbox intentionally requires a non-root POSIX host with numeric uid/gid
+      return;
+    }
     const root = mkdtempSync(path.join(os.tmpdir(), "bp-sandbox-"));
     try {
       const workspace = path.join(root, "worktree");
@@ -205,6 +209,10 @@ describe("Step 10 — rootless container sandbox", () => {
   });
 
   it("fails closed when rootless mode or the local image is unavailable", async () => {
+    if (process.platform === "win32") {
+      // Rootless container sandbox intentionally requires a non-root POSIX host with numeric uid/gid
+      return;
+    }
     const root = mkdtempSync(path.join(os.tmpdir(), "bp-sandbox-fail-"));
     try {
       const noRootless = new FakeRuntime(true, false);
@@ -252,6 +260,10 @@ describe("Step 10 — rootless container sandbox", () => {
   });
 
   it("rejects writable, escaping, reserved, and overlapping mounts before runtime use", async () => {
+    if (process.platform === "win32") {
+      // Rootless container sandbox intentionally requires a non-root POSIX host with numeric uid/gid
+      return;
+    }
     const root = mkdtempSync(path.join(os.tmpdir(), "bp-sandbox-mounts-"));
     const outside = mkdtempSync(path.join(os.tmpdir(), "bp-sandbox-outside-"));
     try {
@@ -278,6 +290,10 @@ describe("Step 10 — rootless container sandbox", () => {
   });
 
   it("preserves cancellation/timeout results and uses kill fallback during cleanup", async () => {
+    if (process.platform === "win32") {
+      // Rootless container sandbox intentionally requires a non-root POSIX host with numeric uid/gid
+      return;
+    }
     const root = mkdtempSync(path.join(os.tmpdir(), "bp-sandbox-termination-"));
     try {
       const base = { policy: sandboxPolicy(), workspaceRoot: root, cwd: root, command: "node", args: [], env: {}, timeoutMs: 1000, killGraceMs: 100, ownerId: "job-owner" } as const;
@@ -302,6 +318,10 @@ describe("Step 10 — rootless container sandbox", () => {
   });
 
   it("preserves bounded output and full-stream hashes at runSafeProcess", async () => {
+    if (process.platform === "win32") {
+      // Rootless container sandbox intentionally requires a non-root POSIX host with numeric uid/gid
+      return;
+    }
     const root = mkdtempSync(path.join(os.tmpdir(), "bp-sandbox-output-"));
     try {
       const result = await runSafeProcess({

@@ -41,7 +41,7 @@ test("Feature B — Production-Ready npm Package Distribution", async (t) => {
     assert.ok(existsSync(tarballPath), `Tarball must exist at ${tarballPath}`);
 
     // Inspect tarball file list
-    const fileList = execSync(`tar -tf "${tarballPath}"`, { encoding: "utf-8" })
+    const fileList = execSync(`tar -tf "${tarballName}"`, { cwd: tmpDir, encoding: "utf-8" })
       .split("\n")
       .map((s) => s.trim())
       .filter(Boolean);

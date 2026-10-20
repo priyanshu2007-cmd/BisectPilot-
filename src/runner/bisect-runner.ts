@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getCurrentHead } from "../git/index.js";
 import { readLedgerEvents } from "../ledger/index.js";
@@ -15,13 +17,15 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
   let manifest;
   try {
     manifest = readSessionManifest(sessionDir);
-  } catch {
+  } catch (err) {
+    console.error(`[bisect-runner] Failed to read session manifest from ${sessionDir}:`, err);
     return 128;
   }
 
   const worktreePath = manifest.repository.worktreePath;
   const currentSha = await getCurrentHead(worktreePath);
   if (!currentSha) {
+    console.error(`[bisect-runner] Failed to get HEAD commit SHA from worktree ${worktreePath}`);
     return 128;
   }
 
@@ -42,7 +46,8 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
       cleanIgnored: manifest.config.execution.cleanIgnored,
       overlayRelativePaths: manifest.config.oracle.overlayFiles,
     });
-  } catch {
+  } catch (err) {
+    console.error(`[bisect-runner] resetOwnedWorktree failed before eval (${currentSha}):`, err);
     return 128;
   }
 
@@ -63,7 +68,8 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
       cleanIgnored: manifest.config.execution.cleanIgnored,
       overlayRelativePaths: manifest.config.oracle.overlayFiles,
     });
-  } catch {
+  } catch (err) {
+    console.error(`[bisect-runner] resetOwnedWorktree failed after eval (${currentSha}):`, err);
     return 128;
   }
 
@@ -105,21 +111,32 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
   return outcome.gitExitCode;
 }
 
-const isMain =
-  process.argv[1] &&
-  fileURLToPath(import.meta.url) === process.argv[1];
+function isEntrypoint(): boolean {
+  if (process.argv.includes("--session-dir")) return true;
+  if (!process.argv[1]) return false;
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    if (thisFile === process.argv[1]) return true;
+    if (path.resolve(thisFile).toLowerCase() === path.resolve(process.argv[1]).toLowerCase()) return true;
+    return fs.realpathSync(thisFile) === fs.realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
 
-if (isMain) {
+if (isEntrypoint()) {
   const idx = process.argv.indexOf("--session-dir");
   const sessionDir = idx >= 0 ? process.argv[idx + 1] : undefined;
   if (!sessionDir) {
+    console.error("[bisect-runner] Missing required --session-dir argument");
     process.exit(128);
   }
   executeSingleBisectStep(sessionDir)
     .then((code) => {
       process.exit(code);
     })
-    .catch(() => {
+    .catch((err) => {
+      console.error("[bisect-runner] Uncaught fatal error in executeSingleBisectStep:", err);
       process.exit(128);
     });
 }

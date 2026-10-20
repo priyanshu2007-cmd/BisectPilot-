@@ -132,7 +132,7 @@ describe("A1 & A2 — Real Git Adapter & Guarded Worktree Lifecycle", () => {
       writeFileSync(path.join(repoMeta.worktreePath, "overlay-test.js"), "console.log(1)\n", "utf-8");
 
       await resetOwnedWorktree(manifestStub, { overlayRelativePaths: ["overlay-test.js"] });
-      assert.equal(readFileSync(path.join(repoMeta.worktreePath, "tracked.txt"), "utf-8"), "v1\n");
+      assert.equal(readFileSync(path.join(repoMeta.worktreePath, "tracked.txt"), "utf-8").replace(/\r\n/g, "\n"), "v1\n");
       assert.equal(existsSync(path.join(repoMeta.worktreePath, "overlay-test.js")), false);
 
       // Guard must refuse resetting or deleting the original repository root or an arbitrary folder
@@ -157,9 +157,9 @@ describe("A1 & A2 — Real Git Adapter & Guarded Worktree Lifecycle", () => {
 
       // Verify user's original checkout is 100% untouched
       assert.equal(await getCurrentHead(repoDir), c2);
-      assert.equal(readFileSync(path.join(repoDir, "tracked.txt"), "utf-8"), "unstaged-user-edit\n");
-      assert.equal(readFileSync(path.join(repoDir, "staged.txt"), "utf-8"), "staged-modification\n");
-      assert.equal(readFileSync(path.join(repoDir, "untracked-user.txt"), "utf-8"), "precious-untracked\n");
+      assert.equal(readFileSync(path.join(repoDir, "tracked.txt"), "utf-8").replace(/\r\n/g, "\n"), "unstaged-user-edit\n");
+      assert.equal(readFileSync(path.join(repoDir, "staged.txt"), "utf-8").replace(/\r\n/g, "\n"), "staged-modification\n");
+      assert.equal(readFileSync(path.join(repoDir, "untracked-user.txt"), "utf-8").replace(/\r\n/g, "\n"), "precious-untracked\n");
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }
