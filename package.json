@@ -19,7 +19,8 @@
     "bisectpilot": "./dist/src/index.js"
   },
   "files": [
-    "dist/src",
+    "dist/src/**/*.js",
+    "dist/src/**/*.d.ts",
     "README.md",
     "LICENSE"
   ],
