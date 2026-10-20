@@ -150,7 +150,7 @@ jobs:
       - name: Pack distributable tarball
         id: pack
         run: |
-          TARBALL=$(npm pack)
+          TARBALL=$(npm pack | tail -n 1 | tr -d '\r')
           echo "tarball=$TARBALL" >> $GITHUB_OUTPUT
           echo "Created package tarball: $TARBALL"
 
