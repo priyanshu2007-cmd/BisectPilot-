@@ -85,9 +85,10 @@ test("Feature C — Standalone Reproducibility Script Generator", async (t) => {
       events: [],
     });
     assert.ok(existsSync(artifacts.reproScriptPath));
-    const mode = statSync(artifacts.reproScriptPath).mode;
-    // Check executable permission for user (0o100)
-    assert.ok((mode & 0o100) !== 0, "repro.sh should be marked executable");
+    if (process.platform !== "win32") {
+      const mode = statSync(artifacts.reproScriptPath).mode;
+      assert.ok((mode & 0o100) !== 0, "repro.sh should be marked executable");
+    }
   });
 
   rmSync(tmpDir, { recursive: true, force: true });
