@@ -67,4 +67,20 @@ describe("CLI — Dispatch & Command Behavior", () => {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("prints only start help for start --help", async () => {
+    let captured = "";
+    const originalWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      captured += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      assert.equal(await runCli(["start", "--help"]), 0);
+      assert.ok(captured.includes("--good"));
+      assert.ok(!captured.includes("daemon start|status"));
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+  });
 });

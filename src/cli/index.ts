@@ -35,37 +35,48 @@ import { runWorkerCommand } from "../worker/cli.js";
 
 const HELP_TEXT = `BisectPilot — Local-First Git Regression Bisection Engine
 
-Usage:
-  bisectpilot doctor [repoPath]
-  bisectpilot init [--out <config.json>]
-  bisectpilot plan [--config <config.json>] [--good <ref>] [--bad <ref>] [--timeout <ms>] -- <command> [args...]
-  bisectpilot start [--config <config.json>] [--cwd <path>] [--scope <paths>] [--yes] [--background] [--good <ref>] [--bad <ref>] [--terms <old,new>] [--sandbox <docker|podman>] [--sandbox-image <repo@sha256:...>] [--noisy] [--prompt] [--timeout <ms>] -- <command> [args...]   (alias: run)
-  bisectpilot status <sessionId> [--session-root <dir>]
-  bisectpilot resume <sessionId> [--session-root <dir>]
-  bisectpilot report <sessionId> [--json] [--html] [--github-summary [file]] [--github-issue] [--out <file>] [--verify] [--session-root <dir>]
-  bisectpilot cleanup <sessionId> [--dry-run] [--session-root <dir>]
-  bisectpilot list [--session-root <dir>]
-  bisectpilot daemon start|status|stop|enqueue|cancel|recover [options]
-  bisectpilot worker start|status|stop [options]
-  bisectpilot minimize <inputPath> --test <cmd> [--args <args>] [--out <path>] [--budget <n>] [--timeout <ms>] [--granularity <line|char|both>] [--noisy] [--json]
+Commands:
+  doctor     Check Git and repository prerequisites.
+  init       Write a starter JSON configuration.
+  plan       Validate bounds and estimate a run; use -- <command> for zero-config mode.
+  start/run  Execute a bisection; use --yes -- <command> [args...] and optional --prompt.
+  status     Inspect a session and recovery metadata.
+  resume     Resume an interrupted session.
+  report     Export Markdown, JSON, HTML, or GitHub reports.
+  cleanup    Remove a tool-owned session worktree.
+  list       List recorded sessions.
+  bisectpilot minimize  Reduce a failure-inducing input.
+  daemon     Manage the optional daemon queue.
+  worker     Manage the optional pull worker.
 
- Session Recovery & Invariants:
-  status <sessionId>     Inspect session state, lock status, and checkpoint metadata.
-                         If state is 'needs_recovery', the session process terminated
-                         abruptly (stale lock detected from dead PID). Checkpoint fields:
-                         checkpointSeq, lastWalSeq, classifiedCount, resumable.
-  resume <sessionId>     Safely resume an interrupted or 'needs_recovery' session.
-                         Clears stale locks, verifies repository ownership, checks config
-                         and overlay hashes, fast-forwards through already classified
-                         commits using cached exit codes, and resumes search without
-                         rerunning completed work.
-  Blocked Recovery:      Resumption is blocked if:
-                         1. Session lock is active by a living PID (locked_active).
-                         2. Worktree or repository commonGitDir does not match manifest.
-                         3. Ownership marker ('bisectpilot-owned.json') is missing/tampered.
-                         4. Ledger hash chain is broken (unrecoverable corruption).
-                         5. Checkpoint schemaVersion is unsupported.
+Run \`bisectpilot <command> --help\` for details.
 `;
+
+const RECOVERY_HELP = `Session Recovery & Invariants:
+  If state is 'needs_recovery', the process terminated abruptly. Inspect checkpointSeq,
+  lastWalSeq, classifiedCount, and resumable before resuming.
+  Recovery is blocked when a live lock, repository mismatch, missing ownership marker,
+  broken ledger hash chain, or unsupported checkpoint schema is detected.
+`;
+
+const COMMAND_HELP: Readonly<Record<string, string>> = {
+  doctor: `Usage: bisectpilot doctor [repoPath]\n\nCheck Git and repository prerequisites.\n\nFlags: -h, --help  Show this help.\nExamples:\n  bisectpilot doctor .\n`,
+  init: `Usage: bisectpilot init [--out <file>] [--force]\n\nWrite a starter configuration using safe defaults.\n\nFlags: --out <file>  Output path (default: bisectpilot.config.json).\n       --force       Overwrite an existing file.\nExamples:\n  bisectpilot init\n  bisectpilot init --out bisectpilot.config.json --force\n`,
+  plan: `Usage: bisectpilot plan [--config <file>] --good <ref> --bad <ref> -- <command> [args...]\n\nValidate bounds and estimate a bisection without executing repository code.\n\nFlags: --config <file>  Load a config; inline command overrides oracle.command.\n       --good <ref>     Known-good ref (auto is supported).\n       --bad <ref>      Known-bad ref.\n       --timeout <ms>   Inline oracle timeout (default: 180000).\nExamples:\n  bisectpilot plan --good v1.0 --bad HEAD -- npm test\n  bisectpilot plan --config bisectpilot.config.json -- node check.js\n`,
+  start: `Usage: bisectpilot start [options] -- <command> [args...]\n       bisectpilot run [options] -- <command> [args...]\n\nRun endpoint checks, native Git Bisect, and boundary confirmation.\n\nFlags: --config <file>  Load a config; inline command overrides oracle.command.\n       --good <ref>     Known-good ref (required without --config).\n       --bad <ref>      Known-bad ref (required without --config).\n       --yes             Consent to execute historical repository code.\n       --timeout <ms>   Inline oracle timeout (default: 180000).\n       --prompt          Ask for interactive classification.\n       --noisy           Enable noisy-oracle sampling.\n       --background      Enqueue through the optional daemon.\nExamples:\n  bisectpilot start --good v1.0 --bad HEAD --yes -- npm test\n  bisectpilot start --good auto --bad HEAD --yes -- ./scripts/check.sh --fast\n`,
+  status: `Usage: bisectpilot status <sessionId> [--session-root <dir>]\n\nInspect session state, lock status, and checkpoint metadata.\n\nFlags: --session-root <dir>  Override the session root.\n\n${RECOVERY_HELP}`,
+  resume: `Usage: bisectpilot resume <sessionId> [--session-root <dir>]\n\nResume an interrupted or recoverable session.\n\nFlags: --session-root <dir>  Override the session root.\n\n${RECOVERY_HELP}`,
+  report: `Usage: bisectpilot report <sessionId> [format flags]\n\nExport session evidence. Markdown is the default format.\n\nFlags: --json, --html, --github-issue, --github-summary [file], --out <file>, --verify.\nExamples:\n  bisectpilot report bp-123 --json --verify\n  bisectpilot report bp-123 --html --out report.html\n`,
+  cleanup: `Usage: bisectpilot cleanup <sessionId> [--dry-run]\n\nRemove the tool-owned session worktree.\n\nFlags: --dry-run  Preview cleanup without removing files.\nExample:\n  bisectpilot cleanup bp-123 --dry-run\n`,
+  list: `Usage: bisectpilot list [--session-root <dir>]\n\nList recorded sessions.\n\nFlags: --session-root <dir>  Override the session root.\nExample:\n  bisectpilot list\n`,
+  minimize: `Usage: bisectpilot minimize <inputPath> --test <command> [options]\n\nReduce a failure-inducing input with Delta Debugging.\n\nFlags: --test <command>, --arg <value>, --args <csv>, --budget <n>, --timeout <ms>, --granularity <line|char|both>, --noisy, --force, --json.\nExamples:\n  bisectpilot minimize input.txt --test node --arg check.js\n  bisectpilot minimize input.txt --test ./check.sh --json\n`,
+  daemon: `Usage: bisectpilot daemon <start|status|stop|enqueue|cancel|recover|revoke> [options]\n\nManage the optional local daemon queue.\n\nRun \`bisectpilot daemon <command> --help\` for service-specific options.\n`,
+  worker: `Usage: bisectpilot worker <start|status|stop> [options]\n\nManage the optional pull worker.\n\nRun \`bisectpilot worker <command> --help\` for service-specific options.\n`,
+};
+
+function commandHelp(command: string | undefined): string {
+  return COMMAND_HELP[command === "run" ? "start" : command ?? ""] ?? HELP_TEXT;
+}
 
 type CliOption = {
   readonly type: "boolean" | "string";
@@ -494,7 +505,7 @@ export async function runCli(
   }
 
   if (args.includes("--help") || args.includes("-h")) {
-    process.stdout.write(HELP_TEXT);
+    process.stdout.write(commandHelp(cmd));
     return 0;
   }
 
