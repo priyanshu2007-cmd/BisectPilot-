@@ -85,3 +85,29 @@ BisectPilot/
 - **Zero-Downtime Context Rotation**: Daemon supports dynamic TLS context rotation via `daemon.rotateServerTls()` calling `server.setSecureContext()` after pre-validating candidate certificate and key files with `tls.createSecureContext()`. Client supports dynamic credential rotation via `client.rotateTlsCredentials()`.
 - **Administrative Revocation Interface**: Administrative actions are exposed via `/v1/admin/revoke` (loopback-only or bearer-authenticated) and `bisectpilot daemon revoke` CLI subcommand, persisting revoked fingerprints and worker IDs to `revocations.json`.
 - **Linux Rootless Podman CI**: Integration tests in `.github/workflows/ci.yml` verify effective rootless Podman execution (`host.security.rootless == true`) on Linux runners with a digest-pinned image, establishing real runtime isolation verification.
+
+## 8. Session Recovery & Durability Architecture (Step 14 & Release Hardening)
+
+- **Authoritative state:** The append-only, SHA-256 hash-chained `ledger.jsonl` (WAL) is the single source of truth. `manifest.json` and `checkpoint.json` are materialized snapshots derived from this ledger.
+- **Checkpoint Durability Guarantees:**
+  - `src/session/checkpoint.ts` implements crash-consistent and durable checkpoint writes.
+  - Checkpoint files are written to a unique process temporary file (`checkpoint.json.<pid>.tmp`), synchronized to disk via `fsyncSync` to flush kernel write buffers, and atomically renamed onto `checkpoint.json`.
+  - On POSIX platforms, the containing directory descriptor is also synchronized via `fsyncSync` to ensure directory entry / inode pointer metadata durability across system crashes.
+  - Before writing a new checkpoint, the existing valid checkpoint is preserved as `checkpoint.backup.json` to prevent data loss if a crash occurs during replacement.
+  - **Process-Crash vs. OS-Crash / Power-Loss:** Process crashes (e.g., SIGKILL / sudden exit) are 100% crash-consistent and recoverable via atomic rename, backup fallback, and WAL replay. OS crashes and power loss are protected on POSIX via temporary-file and directory `fsync`; on platforms without synchronous directory flush support (or where filesystem write-caches ignore flush), recovery falls back to `checkpoint.backup.json` or reconstructs the state from the tamper-evident `ledger.jsonl`.
+- **Tri-Level Fallback Order:** Checkpoint loading uses a strict fallback sequence:
+  1. `checkpoint.json` (verified against embedded SHA-256 checksum and schemaVersion == 1)
+  2. `checkpoint.backup.json` (if primary is corrupt or partially written)
+  3. `reconstructCheckpointFromWal` (authoritative replay from `ledger.jsonl`, failing closed if the hash chain is broken or tampered).
+- **Fast Resume Semantics:** `LocalBisectEngine.resume()` re-establishes native `git bisect run` with `bisect-runner`, which short-circuits any revision already classified in the checkpoint cache. Completed tests are never re-executed.
+- **`needs_recovery` Lifecycle:**
+  - Sessions whose owner process PID is dead while the lockfile remains held transition to `needs_recovery`.
+  - Resume requires explicit user action (`bisectpilot bisect --resume <sessionId>` or `bisectpilot daemon recover <jobId>`).
+- **Blocked Recovery Conditions:** Resumption is strictly blocked if:
+  1. Another active process is currently holding the session lock (PID is alive).
+  2. The target repository does not match the checkpoint's `commonGitDir` or root commit SHA.
+  3. Session worktree ownership markers (`.bisectpilot-owned`) are missing or tampered.
+  4. The WAL hash chain is corrupted or tampered (fail-closed integrity check).
+  5. The checkpoint specifies an unsupported `schemaVersion` (must be 1).
+  When recovery is blocked, all original user checkouts, worktrees, and ledger evidence are safely preserved without modification.
+- **Observability:** `docs/grafana-dashboard.json` provisions a dashboard over the existing Prometheus `/metrics`.

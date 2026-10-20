@@ -47,6 +47,23 @@ Usage:
   bisectpilot daemon start|status|stop|enqueue|cancel|recover [options]
   bisectpilot worker start|status|stop [options]
   bisectpilot minimize <inputPath> --test <cmd> [--args <args>] [--out <path>] [--budget <n>] [--timeout <ms>] [--granularity <line|char|both>] [--noisy] [--json]
+
+Session Recovery & Invariants:
+  status <sessionId>     Inspect session state, lock status, and checkpoint metadata.
+                         If state is 'needs_recovery', the session process terminated
+                         abruptly (stale lock detected from dead PID). Checkpoint fields:
+                         checkpointSeq, lastWalSeq, classifiedCount, resumable.
+  resume <sessionId>     Safely resume an interrupted or 'needs_recovery' session.
+                         Clears stale locks, verifies repository ownership, checks config
+                         and overlay hashes, fast-forwards through already classified
+                         commits using cached exit codes, and resumes search without
+                         rerunning completed work.
+  Blocked Recovery:      Resumption is blocked if:
+                         1. Session lock is active by a living PID (locked_active).
+                         2. Worktree or repository commonGitDir does not match manifest.
+                         3. Ownership marker ('bisectpilot-owned.json') is missing/tampered.
+                         4. Ledger hash chain is broken (unrecoverable corruption).
+                         5. Checkpoint schemaVersion is unsupported.
 `;
 
 export function parseBenchmarkCliOptions(

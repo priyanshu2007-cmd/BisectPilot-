@@ -163,3 +163,13 @@ npm pack
 - `npm test` — Run all TypeScript unit, integration, and safety tests
 - `npm run test:py` — Run Python trace diff unit tests
 - `npm --prefix website run test` — Run website typecheck, linting, and build
+
+## Session Recovery
+
+Each session keeps a hash-chained `events.jsonl` ledger plus `checkpoint.json` / `checkpoint.backup.json`. After a crash run `bisectpilot status <sessionId>` (shows checkpoint seq, classified count, resumable) then `bisectpilot resume <sessionId>`. Revisions already classified are reused, not re-run. If the checkpoint is corrupt it is rebuilt from the ledger; if the ledger itself is tampered with, resume stops with an error. Durability covers process crashes, not power loss.
+
+## Status & Roadmap
+
+Implemented: native Git Bisect engine, noisy-oracle sampling, performance mode (Welch + Mann-Whitney), workspaces, reports (JSON/MD/HTML/GitHub), daemon + durable queue, mTLS workers, rootless sandbox, distributed sampling, Prometheus/tracing, session recovery.
+
+Still to do: verification on real Linux/Windows CI and multi-machine TLS, fsync-level durability and process-kill crash tests, optional OTLP exporter, website workspace-scope display, CHANGELOG/CONTRIBUTING, npm provenance setup. See `docs/handoff.md`.

@@ -1,11 +1,15 @@
 import { createHash } from "node:crypto";
 import {
+  closeSync,
   copyFileSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import path from "node:path";
 import {
@@ -76,14 +80,48 @@ export function writeSessionCheckpointAtomic(
   if (existsSync(target)) {
     try {
       copyFileSync(target, backup);
+      try {
+        const backupFd = openSync(backup, "r");
+        try {
+          fsyncSync(backupFd);
+        } finally {
+          closeSync(backupFd);
+        }
+      } catch {
+        // Best-effort backup fsync
+      }
     } catch {
       // Ignore backup copy errors
     }
   }
 
   const tmpPath = path.join(sessionDir, `checkpoint.${process.pid}.${Date.now()}.tmp`);
-  writeFileSync(tmpPath, JSON.stringify(completeCheckpoint, null, 2) + "\n", "utf-8");
+  const content = JSON.stringify(completeCheckpoint, null, 2) + "\n";
+  const tmpFd = openSync(tmpPath, "w");
+  try {
+    writeSync(tmpFd, content);
+    try {
+      fsyncSync(tmpFd);
+    } catch {
+      // Best-effort tmp file fsync
+    }
+  } finally {
+    closeSync(tmpFd);
+  }
+
   renameSync(tmpPath, target);
+
+  // Best-effort directory metadata fsync on POSIX platforms
+  try {
+    const dirFd = openSync(sessionDir, "r");
+    try {
+      fsyncSync(dirFd);
+    } finally {
+      closeSync(dirFd);
+    }
+  } catch {
+    // Directory fsync is unsupported on Windows and certain network filesystems
+  }
 
   return completeCheckpoint;
 }

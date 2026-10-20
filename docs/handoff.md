@@ -67,3 +67,30 @@
   - `git diff --check` -> passed (exit 0)
 - **Remaining Platform Limitations:** Native Windows container isolation and live multi-machine remote deployment remain unverified on this host.
 - **Recommended Step 12:** Proceed to master plan Sections 20 & 21 (observability, structured metrics, and OpenTelemetry instrumentation hooks).
+
+## Step 14 Handoff: Session Recovery, Audit & Release Readiness
+
+- **Recovery:** `src/session/checkpoint.ts` adds `SessionCheckpointV1` (`checkpoint.json` + `checkpoint.backup.json`, SHA-256 over key-sorted payload, atomic tmp+rename). `readSessionCheckpoint` falls back primary -> backup -> reconstruction from the hash-chained `events.jsonl` ledger (the authoritative WAL). `syncCheckpointWithWal` replays new ledger events idempotently.
+- **Fast resume:** `src/runner/bisect-runner.ts` returns the cached git exit code for revisions already in `checkpoint.classifications`; only new revisions are executed. `resume()` validates checkpoint, worktree ownership, config hash and overlay hashes first.
+- **Daemon:** `DaemonService.recoverActiveSessions()` marks sessions with dead PIDs `needs_recovery` on startup; it never auto-resumes.
+- **Stats:** `mannWhitneyUTest`/`erf` added to `src/domain/statistics.ts`.
+- **Observability:** `docs/grafana-dashboard.json` Prometheus dashboard template.
+- **Verification:** `npm test` 222 pass / 0 fail / 1 skip (macOS, no rootless runtime); `npm run test:py` 4/4; package-distribution 3/3; `npm pack --dry-run` 144 files, 210.5 kB; website build OK; `git diff --check` clean.
+- **Known limits:** durability is process-crash level (atomic rename, no explicit `fsync` of checkpoint); power-loss/storage failure is not guaranteed. Recovery tests simulate crashes by corrupting/removing files rather than killing a live process at every write boundary.
+
+## Remaining Work (post Step 14)
+
+**P1 — verify before calling it released**
+- Run CI on genuine Linux (rootless Podman job) and Windows runners; only macOS has been run locally.
+- Real multi-machine mTLS deployment test (currently loopback only).
+- Add explicit `fsync` (file + directory) to checkpoint write, or document the weaker guarantee in README.
+- Process-kill crash-injection tests at each write boundary (before classification, after WAL/before snapshot, mid-snapshot, during replay).
+- Add `resume`/`status` CLI docs for `needs_recovery`, checkpoint source and blocked-recovery reasons.
+- Unit tests for unsupported schema version and wrong-repository checkpoint rejection.
+
+**P2 — post-release**
+- Optional OTLP exporter bridge (Prometheus `/metrics` + traceparent only today).
+- Website Explorer indicator for workspace/path scope.
+- Verify Windows process-tree termination and daemon behavior on a real runner; document unsupported Windows container isolation.
+- CHANGELOG, CONTRIBUTING, issue templates; npm provenance/trusted-publishing setup (do not publish yet).
+- Automatic parallel bisection (intentionally not implemented; native sequential bisect stays default).

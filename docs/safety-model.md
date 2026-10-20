@@ -53,3 +53,12 @@
 - Peer certificate SHA-256 fingerprints are checked on every request over active TLS connections against an in-memory and disk-persisted revocation list (`revocations.json`), terminating compromised worker access immediately.
 - Workers cannot claim or submit results for jobs assigned to other workers; lease ownership, attempt count, and worker identity must strictly match active job leases.
 - In-place dynamic context rotation (`setSecureContext`) validates replacement keys and certificates prior to application, preventing invalid configuration files from crashing running daemons or workers.
+
+## Session Recovery Guarantees (Step 14)
+
+- Checkpoints are written via temp file + atomic rename; a torn write fails checksum validation and never replaces the last good copy.
+- Corrupt primary falls back to the backup, then to ledger reconstruction. A broken ledger hash chain aborts reconstruction instead of producing an empty session.
+- Cached classifications are reused only for exact commit SHAs recorded by an accepted ledger event; a previously executed command is not treated as a classification.
+- Resume verifies worktree ownership, config hash and overlay hashes; mismatches stop with an error rather than altering good/bad bounds.
+- Daemon restart never auto-resumes or marks interrupted sessions successful.
+- **Not guaranteed:** survival of power loss or storage failure (no explicit fsync of checkpoint data/directory).

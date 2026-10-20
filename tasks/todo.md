@@ -155,3 +155,18 @@
 - [x] Feature G: Unit and integration test suites (`tests/unit/session-recovery.test.ts`, `tests/integration/session-resume-recovery.test.ts`)
 - [x] Feature H: Full master-plan audit against `docs/bisectpilot-master-plan-v3.md` (Sections 19–29, traceability matrix, safety guarantees)
 - [x] Feature I: Complete test and release artifact verification (`npm test` 222/222 passing, `npm run test:py` 4/4 passing, package dry-run and isolated installation 3/3 passing, `website` 8/8 static pages passing, `git diff --check` clean)
+
+## Release Verification Milestone — P1 Blockers & Cross-Platform Hardening
+- [x] Fresh-clone end-to-end bisection functional proof (`tests/integration/fresh-clone-e2e.test.ts` — planted regression c3 found, JSON/MD/HTML report consistency, HTML XSS escaping, timeout safety, skip budget enforcement)
+- [x] P1.3: Checkpoint durability guarantees (`fsyncSync` temporary file & directory synchronization on POSIX in `src/session/checkpoint.ts`)
+- [x] P1.4: Process-kill (SIGKILL) crash tests at persistence write points (`tests/integration/session-resume-recovery.test.ts`)
+- [x] P1.5: Unsupported checkpoint schema version (schemaVersion: 99) and wrong-repository checkpoint rejection tests (`tests/integration/session-resume-recovery.test.ts`)
+- [x] P1.6: Document `needs_recovery` lifecycle, safe inspection, resume commands, and blocked-recovery conditions (`src/cli/index.ts`, `README.md`, `docs/architecture.md`, `docs/safety-model.md`)
+- [x] P1.2: Multi-machine mTLS execution runbook & test harness (`docs/multimachine-mtls-setup.md`, `tests/integration/mtls-remote-worker.test.ts` 10/10 automated tests pass; Physical multi-machine deployment: `BLOCKED` / `UNVERIFIED` due to lack of 2nd physical machine)
+- [!] P1.1: Genuine Linux & Windows CI execution (Investigated CI run 39415440984: Windows checkout blocked by git tree entry with trailing space `skills `; Linux rootless Podman requires container runtime with cgroup v2: `BLOCKED` / `UNVERIFIED`)
+
+## P2 — Deferred Post-Release Items
+- [ ] P2.1: Optional OpenTelemetry Collector OTLP exporter (W3C traceparent and Prometheus /metrics exist)
+- [ ] P2.2: Website workspace / package-scope indicator in Explorer specimen
+- [ ] P2.3: Deeper native Windows process-tree (`taskkill.exe`) and daemon recovery tests
+- [ ] P2.4: Open-source community files (CHANGELOG, CONTRIBUTING, issue templates, npm provenance preparation)

@@ -71,3 +71,8 @@
 - **Lifecycle**: Create/start/inspect/stop/remove only owned containers; preserve AbortSignal, timeout, bounded output and ledger provenance. A lost cleanup is recorded as an explicit limitation and never followed by broad container cleanup.
 - **Verification**: Fake runtime tests cover validation, argv hardening, mounts, env filtering, result mapping, cancellation and ownership. A real runtime integration test is explicitly skipped with a reason when Docker/Podman/rootless/image prerequisites are unavailable. Full existing suites and package checks remain required.
 - **Status**: Implementation and local regression verification complete; real Docker/Podman rootless isolation remains unverified when runtime/image prerequisites are unavailable.
+
+## Step 14: Session Recovery, Master-Plan Audit & Release Readiness
+
+- **Scope**: Ledger-as-WAL plus versioned checksummed checkpoints with backup and ledger reconstruction; fast resume via cached classifications; daemon-startup flagging of dead-owner sessions; Mann-Whitney U; Grafana template.
+- **Status**: Implemented and locally verified (222 pass, 1 skip). Open items: real Linux/Windows CI evidence, multi-machine mTLS, fsync durability, process-kill crash tests, optional OTLP, docs/community files. See `docs/handoff.md` "Remaining Work".
