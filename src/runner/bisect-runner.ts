@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 import { fileURLToPath } from "node:url";
 import { getCurrentHead } from "../git/index.js";
+import { readLedgerEvents } from "../ledger/index.js";
 import { evaluateCheckedOutRevision } from "../oracle/index.js";
-import { readSessionManifest, writeSessionManifestAtomic } from "../session/index.js";
+import {
+  readSessionCheckpoint,
+  readSessionManifest,
+  recordRevisionClassificationCheckpoint,
+  writeSessionManifestAtomic,
+} from "../session/index.js";
 import { resetOwnedWorktree } from "../worktree/index.js";
 
 export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1 | 125 | 128> {
@@ -17,6 +23,18 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
   const currentSha = await getCurrentHead(worktreePath);
   if (!currentSha) {
     return 128;
+  }
+
+  // Fast resume: if this revision is already authoritatively classified in checkpoint/WAL,
+  // reuse its authoritative outcome immediately without repeating expensive builds/tests.
+  try {
+    const { checkpoint } = readSessionCheckpoint(sessionDir);
+    const cached = checkpoint.classifications[currentSha];
+    if (cached) {
+      return cached.gitExitCode;
+    }
+  } catch {
+    // Proceed with live evaluation if checkpoint read fails
   }
 
   try {
@@ -37,6 +55,7 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
     config: manifest.config,
     overlayHashes: manifest.overlayHashes,
     phasePrefix: "oracle",
+    benchmarkBaseline: manifest.benchmarkBaseline,
   });
 
   try {
@@ -57,6 +76,27 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
     lastRecordedRevision: currentSha,
   };
   writeSessionManifestAtomic(updatedManifest);
+
+  try {
+    const events = readLedgerEvents(manifest.ledgerPath);
+    recordRevisionClassificationCheckpoint(
+      sessionDir,
+      {
+        commitSha: currentSha,
+        classification: outcome.kind === "good" ? "good" : outcome.kind === "bad" ? "bad" : outcome.kind === "skip" ? "skip" : "abort",
+        reasonCode: outcome.reasonCode,
+        gitExitCode: outcome.gitExitCode,
+        detail: outcome.detail,
+        durationMs: undefined,
+        noisySampling: outcome.noisySampling,
+        benchmark: outcome.benchmark as any,
+        classifiedAt: new Date().toISOString(),
+      },
+      events.length
+    );
+  } catch {
+    // Non-fatal if checkpoint snapshot update fails
+  }
 
   if (outcome.kind === "skip" && nextSkipCount > manifest.config.execution.maxSkips) {
     return 128;

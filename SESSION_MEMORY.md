@@ -4,32 +4,81 @@ Use this file for temporary task-specific context.
 
 It prevents `AI_BRAIN.md` from becoming bloated.
 
-# SESSION MEMORY
-
-Use this file for temporary task-specific context.
-
-It prevents `AI_BRAIN.md` from becoming bloated.
-
 ## Current Goal
 
-Complete Step 4 delivery (custom bisect terms, Bayesian noisy-oracle classification, standalone repro generator, toolchain wrappers, CLI report replay, and release hardening), update documentation, and commit & push all changes to `agent-a/engine`.
+Complete Step 14 delivery: Automated Session Recovery, Master-Plan Audit & Release Readiness. Implement durable checkpoints, WAL sync, exact fast resume, daemon crash recovery, heavy-tailed statistical testing, and audit the repository against the master plan for release readiness.
 
-## Files Modified in Steps 2–4
+## Step 14 Working Context
 
-- Core Engine: `src/application/index.ts`, `src/contracts/config.ts`, `src/contracts/engine.ts`, `src/contracts/ledger.ts`, `src/contracts/outcome.ts`, `src/domain/classification.ts`, `src/domain/index.ts`, `src/domain/bayesian.ts`, `src/oracle/index.ts`, `src/reports/index.ts`, `src/reports/replay-adapter.ts`, `src/cli/index.ts`, `src/adapters/git/git-client.ts`, `src/adapters/process/process-runner.ts`
-- Tests: `tests/fixtures/fake-engine.ts`, `tests/integration/auto-good-discovery.test.ts`, `tests/integration/engine-bisect.test.ts`, `tests/unit/cli.test.ts`, `tests/unit/custom-terms.test.ts`, `tests/unit/noisy-oracle.test.ts`, `tests/unit/prompt-oracle.test.ts`, `tests/unit/toolchain-wrapper.test.ts`, `tests/unit/repro-script.test.ts`, `tests/unit/report-replay-adapter.test.ts`, `tests/unit/process-termination.test.ts`
-- Website: `website/components/PilotConsole.tsx`, `website/lib/report-importer.ts`, `website/package.json`
-- CI/Workflow: `.github/workflows/ci.yml`
-- Documentation: `README.md`, `AI_BRAIN.md`, `docs/architecture.md`, `docs/handoff.md`, `tasks/todo.md`, `tasks/plan.md`, `SKILL_EXECUTION_REPORT.md`
+- Tri-level resilience architecture: `checkpoint.json` -> `checkpoint.backup.json` -> `reconstructed_from_wal` (using hash-chained append-only `events.jsonl`).
+- Deterministic checksum: SHA-256 computed on key-sorted JSON without `checksum` property and filtering `undefined` values.
+- Fast resume: `executeSingleBisectStep` checks `checkpoint.classifications[currentSha]` first; returns cached `gitExitCode` in milliseconds, avoiding rerun of tests or sandboxes for already classified commits.
+- Daemon recovery: `DaemonService.recoverActiveSessions()` discovers dead-process sessions on startup and marks them `needs_recovery`.
+- Non-parametric benchmark testing: `mannWhitneyUTest` and `erf` added in `src/domain/statistics.ts` for heavy-tailed or multimodal benchmark metrics.
+- Observability: `docs/grafana-dashboard.json` dashboard provisioning template added for Prometheus metrics exposition.
 
-## Verification & Test Results
+## Files Modified in Step 8
 
-- TypeScript engine: `npm test` -> 85/85 tests passed across 11 suites.
-- Python CLI: `PYTHONPATH=src python3 -m unittest discover -s tests -p "*.py"` -> 4/4 tests passed.
-- Website: `npm --prefix website run test` (typecheck, lint, build) -> clean, all 8 routes generated.
-- Dependency audit: `npm audit --omit=dev` -> 0 vulnerabilities in engine; website `braces` pinned to `^3.0.3`.
+- Statistics Domain: `src/domain/statistics.ts` (`calculateSampleStats`, `calculatePercentile`, `logGamma`, `regularizedIncompleteBeta`, `calculateStudentsTPValue`, `welchTTest`).
+- Benchmark Domain: `src/domain/benchmark.ts` (`parseBenchmarkMetric`, `buildBenchmarkStats`, `evaluateBenchmarkRegression`, `BenchmarkSpec`, `BenchmarkStats`, `BenchmarkEvaluationResult`).
+- Domain Index: `src/domain/index.ts` (exported `statistics.js` and `benchmark.js`).
+- Config Contract: `src/contracts/config.ts` (added `"performance"` to `RegressionProfile`, defined `BenchmarkSpec`, `BenchmarkDirection`, updated `BisectConfigV1` and `validateConfig`).
+- Outcome Contract: `src/contracts/outcome.ts` (added benchmark reason codes `benchmark_regression_detected`, `benchmark_within_tolerance`, etc., and `benchmark` field).
+- Ledger Contract: `src/contracts/ledger.ts` (added `benchmark?: BenchmarkSpec` to `SessionCreatedEvent` and detailed benchmark metrics to `RevisionClassifiedEvent.benchmark`).
+- Session Contract: `src/contracts/session.ts` (added `benchmarkBaseline?: BenchmarkStats` to `SessionManifestV1`).
+- Application Engine: `src/application/index.ts` (preflight good endpoint baseline collection, bad endpoint regression validation, git checkout and reset).
+- Oracle Executor: `src/oracle/index.ts` (warmup run discarding, sample collection, sequential early stopping on Welch's t-test significance, ledger event recording).
+- Bisect Runner: `src/runner/bisect-runner.ts` (pass `manifest.benchmarkBaseline` to `evaluateCheckedOutRevision`).
+- Reports & Repro: `src/reports/index.ts` (benchmark summary in JSON and Markdown reports).
+- HTML Report: `src/reports/html-report.ts` (Benchmark Metric tile in executive summary).
+- GitHub Summary: `src/reports/github-summary.ts` (Benchmark Metric row in Key Findings table).
+- CLI Parser: `src/cli/index.ts` (CLI options `--metric`, `--threshold`, `--relative-regression`, `--direction`, `--warmup`, `--samples`, `--min-samples`, `--max-samples`, `--alpha`, `--unit`).
+- Tests: `tests/unit/statistics.test.ts` (10 tests), `tests/unit/benchmark.test.ts` (13 tests), `tests/integration/benchmark-bisect.test.ts` (1 integration test with real Git fixture).
+- Documentation: `README.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `tasks/todo.md`, `docs/architecture.md`, `docs/handoff.md`.
 
-## Status
+## Step 9 Files & Verification
 
-All features verified. Staging, committing, and pushing to branch `agent-a/engine`.
+- Contracts/queue: `src/contracts/jobs.ts`, `src/jobs/index.ts` — typed payloads, validated transition history, atomic snapshots, leases, attempts, cancellation, idempotency and conservative recovery.
+- Daemon: `src/daemon/index.ts`, `src/daemon/client.ts`, `src/daemon/cli.ts` — authenticated bounded HTTP, loopback/TLS policy, lifecycle, queue protocol and daemon ownership lock.
+- Worker: `src/worker/index.ts`, `src/worker/cli.ts` — outbound polling, pre-provisioned repository/path/SHA validation, heartbeat, cancellation and existing-engine execution.
+- Tests: `tests/unit/jobs.test.ts`, `tests/unit/daemon.test.ts`, `tests/integration/daemon-worker.test.ts`.
+- Docs/memory: `README.md`, `docs/architecture.md`, `docs/safety-model.md`, `docs/handoff.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `tasks/plan.md`, `tasks/todo.md`.
 
+Latest verification:
+- TypeScript: `npm test` -> 168/168 tests passed across 16 suites.
+- Python: `npm run test:py` -> 4/4 tests passed.
+- Packaging: `npm pack --dry-run` -> 123 files, 149.2 kB tarball size.
+- Format: `git diff --check` -> 0 formatting issues.
+- Manual: detached daemon and worker start/status/stop lifecycle checks passed.
+- Limitation: remote TLS, separate-machine workers and Windows behavior remain untested.
+
+## Step 11 Working Context
+
+- Protocol & Transport: Bidirectional mutual TLS over `node:https`/`node:tls`. Worker verifies server cert and hostname; daemon enforces `requestCert: true`, `rejectUnauthorized: true`. Zero tolerance for `rejectUnauthorized: false`.
+- Network boundaries: Non-loopback daemon binds require TLS cert, key, and CA. Client rejects plain HTTP for non-loopback URLs. POSIX key permissions must be 0o600.
+- Worker Authorization: Peer certificate Subject CN is extracted and verified against claimed `workerId`. Allowlist of identities and SHA-256 fingerprints is enforced.
+- Revocation: In-flight SHA-256 fingerprint check on every request over established TLS connections. Admin endpoint `/v1/admin/revoke` and CLI `bisectpilot daemon revoke` persist revocations to `revocations.json`.
+- Dynamic Rotation: Zero-downtime server TLS context update via `server.setSecureContext()` and client credential rotation via `client.rotateTlsCredentials()`, with pre-validation via `tls.createSecureContext()`.
+- Rootless Container CI: Added Linux workflow step in `.github/workflows/ci.yml` using `podman` on `ubuntu-latest` with digest-pinned `alpine:latest`.
+
+## Step 12 Working Context: Production Observability, OpenTelemetry & Prometheus Metrics
+
+- Tracing Architecture: Native W3C Trace Context (`traceparent` header `00-${traceId}-${spanId}-${flags}`) parser and formatter with zero external dependencies. `Tracer`, `Span`, `SimpleTracer` using `AsyncLocalStorage`, `InMemorySpanExporter`, `NoopTracer`. Built-in attribute sanitization redacting tokens, keys, secrets, passwords, cookies, and certificates.
+- Prometheus Exposition: Prometheus 0.0.4 text format generated from lightweight `MetricsRegistry`, `Counter`, `Gauge` (bounded >= 0), and `Histogram` with default standard latency/duration buckets and cumulative observations.
+- Security Boundary: `/metrics` bound directly to daemon HTTP/HTTPS server. Loopback calls allowed directly; remote calls strictly enforced with mutual TLS client certificates and Bearer token authorization. Never leaks secrets or unbound session IDs/commits.
+- Lifecycle Events Instrumented:
+  - Queue: `bisectpilot_queue_depth`, `bisectpilot_active_jobs`, `bisectpilot_jobs_total`, `bisectpilot_active_leases`, `bisectpilot_lease_renewal_failures_total`, `bisectpilot_expired_leases_total`, `bisectpilot_queue_waiting_duration_seconds`, `bisectpilot_job_execution_duration_seconds`.
+  - Workers: `bisectpilot_registered_workers` (available/busy).
+  - Engine/Oracle: `bisectpilot_active_sessions`, `bisectpilot_revision_evaluations_total`, `bisectpilot_revisions_classified_total`, `bisectpilot_oracle_execution_duration_seconds`, `bisectpilot_candidate_boundary_verifications_total`, `bisectpilot_benchmark_samples_total`, `bisectpilot_benchmark_evaluation_duration_seconds`.
+  - Sandbox: `bisectpilot_sandbox_preflight_failures_total`, `bisectpilot_container_execution_duration_seconds`.
+  - Reliability: `bisectpilot_process_timeouts_total`, `bisectpilot_cancellations_total`, `bisectpilot_process_execution_failures_total`, `bisectpilot_recovery_required_sessions_total`, `bisectpilot_report_generation_failures_total`.
+- Audit Export: `AuditEventExporter` interface with `InMemoryAuditEventExporter`, `FileAuditEventExporter`, and `WebhookAuditEventExporter`. Verifies tamper-evident ledger hash chain before exporting; rejects corrupted chains; prevents recursive telemetry loops.
+- Diagnostics: Daemon `/v1/status` augmented with `telemetry` (metricsEndpoint, tracingEnabled, registeredMetricsCount).
+
+Latest Step 12 verification:
+- `npm run build`: Compiled with 0 errors.
+- `npm test`: 199/199 tests passed across 21 suites (1 skipped on macOS).
+- `npm run test:py`: 4/4 passed.
+- `node --test dist/tests/integration/package-distribution.test.js`: 3/3 passed.
+- `npm pack --dry-run`: 138 files, 193.3 kB package size.
+- `git diff --check`: 0 issues.

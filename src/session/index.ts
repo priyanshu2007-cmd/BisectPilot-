@@ -18,8 +18,16 @@ import {
   type SessionState,
 } from "../contracts/index.js";
 import { appendLedgerEvent } from "../ledger/index.js";
+import { defaultMetrics } from "../telemetry/index.js";
+import {
+  checkpointToManifest,
+  getCheckpointPath,
+  readSessionCheckpoint,
+  syncCheckpointWithWal,
+} from "./checkpoint.js";
 
 export * from "../contracts/session.js";
+export * from "./checkpoint.js";
 
 const MANIFEST_FILENAME = "manifest.json";
 const LOCK_FILENAME = "session.lock";
@@ -43,13 +51,33 @@ export function writeSessionManifestAtomic(manifest: SessionManifestV1): void {
 export function readSessionManifest(sessionDir: string): SessionManifestV1 {
   const target = getManifestPath(sessionDir);
   if (!existsSync(target)) {
-    throw new Error(`Session manifest not found at ${target}`);
+    try {
+      const { checkpoint } = readSessionCheckpoint(sessionDir);
+      const ledgerPath = path.join(sessionDir, "events.jsonl");
+      const reconstructed = checkpointToManifest(checkpoint, sessionDir, ledgerPath);
+      writeSessionManifestAtomic(reconstructed);
+      return reconstructed;
+    } catch {
+      throw new Error(`Session manifest not found at ${target}`);
+    }
   }
-  const parsed = JSON.parse(readFileSync(target, "utf-8")) as SessionManifestV1;
-  if (parsed.schemaVersion !== 1 || typeof parsed.id !== "string" || !parsed.repository?.worktreePath) {
-    throw new Error(`Invalid or corrupted session manifest at ${target}`);
+  try {
+    const parsed = JSON.parse(readFileSync(target, "utf-8")) as SessionManifestV1;
+    if (parsed.schemaVersion !== 1 || typeof parsed.id !== "string" || !parsed.repository?.worktreePath) {
+      throw new Error(`Invalid or corrupted session manifest at ${target}`);
+    }
+    return parsed;
+  } catch (err) {
+    try {
+      const { checkpoint } = readSessionCheckpoint(sessionDir);
+      const ledgerPath = path.join(sessionDir, "events.jsonl");
+      const reconstructed = checkpointToManifest(checkpoint, sessionDir, ledgerPath);
+      writeSessionManifestAtomic(reconstructed);
+      return reconstructed;
+    } catch {
+      throw err;
+    }
   }
-  return parsed;
 }
 
 /**
@@ -84,6 +112,28 @@ export function transitionSessionState(
     updatedAt: new Date().toISOString(),
   };
   writeSessionManifestAtomic(updated);
+
+  try {
+    if (existsSync(getCheckpointPath(manifest.sessionDir))) {
+      syncCheckpointWithWal(manifest.sessionDir);
+    }
+  } catch {
+    // Checkpoint sync failure does not compromise ledger or manifest
+  }
+
+  if (manifest.state === "created" && to !== "created" && !TERMINAL_SESSION_STATES.has(to) && to !== "concluded") {
+    defaultMetrics.activeSessions.inc();
+  } else if (!TERMINAL_SESSION_STATES.has(manifest.state) && manifest.state !== "concluded" && (TERMINAL_SESSION_STATES.has(to) || to === "concluded")) {
+    defaultMetrics.activeSessions.dec();
+  }
+
+  if (to === "needs_recovery") {
+    defaultMetrics.recoveryRequiredSessionsTotal.inc();
+  }
+  if (to === "cancelled") {
+    defaultMetrics.cancellationsTotal.inc({ scope: "session" });
+  }
+
   return updated;
 }
 

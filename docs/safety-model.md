@@ -23,7 +23,33 @@
 - Timeouts (`skip` -> `125`), missing executables (`abort` -> `128`), and prepare/build prerequisite failures (`skip` -> `125`) are **never** classified as `bad` (`1`).
 - The bisect runner never emits exit codes `126` or `127`.
 
-## 4. Important Limitation: Worktree != Sandbox
+## 4. Opt-In Rootless Sandbox
+
+- Direct execution remains the default. `execution.sandbox` is required before any Docker/Podman invocation; there is no automatic image pull and no unsandboxed fallback when sandbox preflight fails.
+- Sandbox preflight requires a local runtime endpoint, a structured rootless attestation, a locally available lowercase digest-pinned image, a non-root POSIX caller, and valid bounded resources. Remote Docker/Podman endpoints, runtime-socket mounts, writable extra mounts, reserved container targets, path traversal, symlink escapes, and persisted sandbox environment overrides are rejected.
+- The container boundary uses `--network none`, `--read-only`, `--cap-drop ALL`, `no-new-privileges`, numeric non-root uid/gid, CPU/memory/PID/tmpfs limits, a cleared image entrypoint, and only the worktree plus approved read-only session inputs. The worktree is intentionally writable so historical builds can produce artifacts; it is still a tool-owned detached worktree, never the user's primary checkout.
+- A created container must pass an ownership and restriction inspection before it starts. The ID and owner label are written to the hash-chained ledger immediately after creation. Cleanup stops (then kills if necessary) and removes only an ownership-matching container; an ownership mismatch or cleanup failure aborts closed and never triggers broad label/PID cleanup.
+- Runtime output is bounded at the process boundary, while full observed stream hashes/byte counts and truncation flags remain available for evidence. Cancellation and timeout are classified before ordinary runtime/image/policy failures; cleanup failure takes precedence because it leaves an explicit safety uncertainty.
+
+## 5. Important Limitation: Worktree != Sandbox
 
 - A Git worktree isolates working files and `refs/bisect/*` state, **not** OS-level processes, filesystem outside the worktree, or network access.
 - Executing historical builds or tests runs repository code with the invoking user's permissions. BisectPilot requires explicit consent (`confirmBeforeExecutingCode` / `--yes`) before running historical code. For untrusted or hostile repositories, run BisectPilot inside an isolated container or VM.
+
+## 6. Daemon & Worker Boundaries
+
+- Daemon state and queue files use atomic sibling-write plus rename. Queue files contain validated configs and transition history, never bearer-token values or `execution.envOverrides`.
+- Daemon HTTP binds to loopback unless HTTPS is explicitly configured. Every protocol route except minimal `/health` requires a bearer token from a protected file. Fixed-length token comparisons use constant-time comparison; tokens are never logged.
+- Workers initiate outbound polling. Remote workers use HTTPS and a pre-provisioned repository key mapped to a local absolute path. The worker verifies Git refs and rejects repository-path escapes, absolute oracle paths and symlink escapes before execution.
+- Lease expiry before the first heartbeat may retry. Started or ambiguous work becomes `needs_recovery`; daemon shutdown never marks it successful or deletes its session worktree.
+- Remote-machine, Windows and TLS deployment behavior is not claimed by local loopback tests; use a trusted certificate and test each target platform before production use.
+
+## 7. Mutual TLS & Remote Worker Security Boundaries (Step 11)
+
+- Bidirectional certificate verification is strictly enforced (`rejectUnauthorized: true`). Mismatched server hostnames, untrusted CAs, expired certificates, or missing client certificates are rejected at the TLS handshake.
+- Non-loopback daemon binds refuse plain HTTP and require server certificate, private key, and trusted client CA material. Remote workers refuse plain HTTP URLs.
+- Private keys and token files require POSIX `0o600` permissions (read/write only by owner); insecure permissions fail startup immediately.
+- Client Subject Common Name (`CN`) must match the claimed `workerId`. Workers cannot claim or impersonate identities other than what their client certificate asserts.
+- Peer certificate SHA-256 fingerprints are checked on every request over active TLS connections against an in-memory and disk-persisted revocation list (`revocations.json`), terminating compromised worker access immediately.
+- Workers cannot claim or submit results for jobs assigned to other workers; lease ownership, attempt count, and worker identity must strictly match active job leases.
+- In-place dynamic context rotation (`setSecureContext`) validates replacement keys and certificates prior to application, preventing invalid configuration files from crashing running daemons or workers.

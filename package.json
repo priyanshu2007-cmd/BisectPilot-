@@ -6,15 +6,29 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "bin": {
     "bisectpilot": "./dist/src/index.js"
   },
+  "files": [
+    "dist/src",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
-    ".": "./dist/src/index.js",
-    "./contracts": "./dist/src/contracts/index.js"
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/src/contracts/index.d.ts",
+      "default": "./dist/src/contracts/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.json && node --test dist/tests/unit/*.test.js dist/tests/integration/*.test.js dist/tests/safety/*.test.js",
     "test:unit": "tsc -p tsconfig.json && node --test dist/tests/unit/*.test.js",
@@ -22,6 +36,7 @@
     "test:safety": "tsc -p tsconfig.json && node --test dist/tests/safety/*.test.js",
     "test:py": "PYTHONPATH=src python3 -m unittest discover -s tests -v"
   },
+
   "devDependencies": {
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2"

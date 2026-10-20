@@ -76,6 +76,13 @@ export interface SessionStatusReport {
   };
   readonly eventCount: number;
   readonly ledgerValid: boolean;
+  readonly checkpoint?: {
+    readonly checkpointSeq: number;
+    readonly lastWalSeq: number;
+    readonly classifiedCount: number;
+    readonly searchPhase: string;
+    readonly resumable: boolean;
+  };
 }
 
 export interface BisectEngine {
@@ -83,13 +90,12 @@ export interface BisectEngine {
   plan(config: BisectConfigV1): Promise<BisectPlanReport>;
   start(config: BisectConfigV1, options?: StartSessionOptions): Promise<SessionManifestV1>;
   status(sessionId: string, sessionRootDir?: string): Promise<SessionStatusReport>;
-  resume(sessionId: string, options?: StartSessionOptions): Promise<SessionManifestV1>;
+  resume(sessionId: string, options?: StartSessionOptions, sessionRootDir?: string): Promise<SessionManifestV1>;
   cleanup(sessionId: string, options?: CleanupOptions, sessionRootDir?: string): Promise<CleanupResult>;
   list(sessionRootDir?: string): Promise<readonly SessionManifestV1[]>;
 }
 
 /**
- * Re-exported for backward compatibility with existing contract tests.
- * Implementation moved to tests/fixtures/fake-engine.ts.
+ * Re-exported for backward compatibility with existing contract consumers.
  */
-export { FakeEngine } from "../../tests/fixtures/fake-engine.js";
+export { FakeEngine } from "./fake-engine.js";

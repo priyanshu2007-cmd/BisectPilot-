@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
 import { runCli } from "./cli/index.js";
 
 export * from "./contracts/index.js";
@@ -14,12 +16,23 @@ export * from "./session/index.js";
 export * from "./reports/index.js";
 export * from "./application/index.js";
 export * from "./cli/index.js";
+export * from "./jobs/index.js";
+export * from "./daemon/index.js";
+export * from "./worker/index.js";
+export * from "./telemetry/index.js";
 
-const isMain =
-  process.argv[1] &&
-  fileURLToPath(import.meta.url) === process.argv[1];
+function isCliInvocation(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    const currentPath = fileURLToPath(import.meta.url);
+    if (process.argv[1] === currentPath) return true;
+    return realpathSync(process.argv[1]) === realpathSync(currentPath);
+  } catch {
+    return false;
+  }
+}
 
-if (isMain) {
+if (isCliInvocation()) {
   runCli(process.argv.slice(2))
     .then((code) => {
       process.exit(code);

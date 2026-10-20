@@ -129,8 +129,17 @@ export async function isAncestor(cwd: string, ancestorSha: string, descendantSha
   return res.exitCode === 0;
 }
 
-export async function countCommitsBetween(cwd: string, goodSha: string, badSha: string): Promise<number> {
-  const res = await runGit(["rev-list", "--count", `${goodSha}..${badSha}`], cwd);
+export async function countCommitsBetween(
+  cwd: string,
+  goodSha: string,
+  badSha: string,
+  pathspec?: readonly string[]
+): Promise<number> {
+  const args = ["rev-list", "--count", `${goodSha}..${badSha}`];
+  if (pathspec && pathspec.length > 0) {
+    args.push("--", ...pathspec);
+  }
+  const res = await runGit(args, cwd);
   if (res.exitCode !== 0) return 0;
   const count = Number.parseInt(res.stdout, 10);
   return Number.isFinite(count) ? count : 0;

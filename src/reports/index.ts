@@ -6,6 +6,11 @@ import {
   type LedgerEvent,
   type SessionManifestV1,
 } from "../contracts/index.js";
+import type { BenchmarkStats } from "../domain/benchmark.js";
+import { resolveWorkspacePathScope } from "../domain/workspace.js";
+import { generateHtmlReport } from "./html-report.js";
+import { appendGitHubStepSummary, generateGitHubStepSummary } from "./github-summary.js";
+import { defaultMetrics } from "../telemetry/index.js";
 
 const SECRET_REPLACEMENTS: ReadonlyArray<{ readonly pattern: RegExp; readonly replacement: string }> = [
   { pattern: /\b(gh[pousr]_[A-Za-z0-9_]{20,})\b/g, replacement: "[REDACTED_GITHUB_TOKEN]" },
@@ -59,7 +64,32 @@ export interface SessionJsonReportV1 {
       readonly posterior: number;
       readonly confidenceThreshold: number;
     };
+    readonly benchmark?: {
+      readonly metric: string;
+      readonly unit?: string;
+      readonly sampleCount: number;
+      readonly mean: number;
+      readonly baselineMean?: number;
+      readonly absoluteDelta?: number;
+      readonly relativeDelta?: number;
+      readonly pValue?: number;
+      readonly isSignificant?: boolean;
+      readonly isPracticalRegression?: boolean;
+    };
   }>;
+  readonly workingDirectory?: string;
+  readonly pathScope?: readonly string[];
+  readonly benchmark?: {
+    readonly metric: string;
+    readonly unit?: string;
+    readonly baseline?: BenchmarkStats;
+    readonly candidate?: BenchmarkStats;
+    readonly absoluteDelta?: number;
+    readonly relativeDelta?: number;
+    readonly pValue?: number;
+    readonly isSignificant?: boolean;
+    readonly isPracticalRegression?: boolean;
+  };
   readonly limitations: readonly string[];
 }
 
@@ -77,7 +107,38 @@ export function generateJsonReport(
       gitExitCode: e.gitExitCode,
       ...(e.classifiedBy ? { classifiedBy: e.classifiedBy } : {}),
       ...(e.noisySampling ? { noisySampling: e.noisySampling } : {}),
+      ...(e.benchmark ? { benchmark: e.benchmark } : {}),
     }));
+
+  const effectivePathScope =
+    manifest.config.pathScope ??
+    resolveWorkspacePathScope(manifest.repository.rootPath, manifest.config.workingDirectory);
+
+  let benchmarkSummary: SessionJsonReportV1["benchmark"] = undefined;
+  if (manifest.benchmarkBaseline) {
+    const candidateEvent = evaluations.find(
+      (e) => (manifest.conclusion?.candidateSha && e.commitSha === manifest.conclusion.candidateSha) || e.classification === "bad"
+    );
+    benchmarkSummary = {
+      metric: manifest.benchmarkBaseline.metric,
+      unit: manifest.benchmarkBaseline.unit,
+      baseline: manifest.benchmarkBaseline,
+      ...(candidateEvent?.benchmark
+        ? {
+            candidate: {
+              ...manifest.benchmarkBaseline,
+              mean: candidateEvent.benchmark.mean,
+              count: candidateEvent.benchmark.sampleCount,
+            },
+            absoluteDelta: candidateEvent.benchmark.absoluteDelta,
+            relativeDelta: candidateEvent.benchmark.relativeDelta,
+            pValue: candidateEvent.benchmark.pValue,
+            isSignificant: candidateEvent.benchmark.isSignificant,
+            isPracticalRegression: candidateEvent.benchmark.isPracticalRegression,
+          }
+        : {}),
+    };
+  }
 
   return {
     schemaVersion: 1,
@@ -96,6 +157,11 @@ export function generateJsonReport(
     overlayHashes: manifest.overlayHashes,
     deterministicEnvironment: DETERMINISTIC_ENV_DEFAULTS,
     evaluations,
+    ...(manifest.config.workingDirectory && manifest.config.workingDirectory !== "."
+      ? { workingDirectory: manifest.config.workingDirectory }
+      : {}),
+    ...(effectivePathScope ? { pathScope: effectivePathScope } : {}),
+    ...(benchmarkSummary ? { benchmark: benchmarkSummary } : {}),
     limitations: [
       "A Git worktree isolates working files and bisect refs, not OS-level processes or network access.",
       "Non-monotonic commit histories may contain multiple transitions; boundary verification confirms the reported pair.",
@@ -114,7 +180,10 @@ export function generateMarkdownReport(
       const noisyNote = e.noisySampling
         ? ` *(noisy: P(bad)=${e.noisySampling.posterior.toFixed(2)}, ${e.noisySampling.failedRuns}F/${e.noisySampling.passedRuns}P)*`
         : "";
-      return `| \`${e.commitSha.slice(0, 8)}\` | **${e.classification}**${e.classifiedBy === "human" ? " *(manual)*" : ""}${noisyNote} | \`${e.reasonCode}\` | ${e.detail} |`;
+      const benchNote = e.benchmark
+        ? ` *(mean: ${e.benchmark.mean.toFixed(1)}${e.benchmark.unit ? " " + e.benchmark.unit : ""}${e.benchmark.relativeDelta !== undefined ? `, ${e.benchmark.relativeDelta >= 0 ? "+" : ""}${(e.benchmark.relativeDelta * 100).toFixed(1)}%` : ""})*`
+        : "";
+      return `| \`${e.commitSha.slice(0, 8)}\` | **${e.classification}**${e.classifiedBy === "human" ? " *(manual)*" : ""}${noisyNote}${benchNote} | \`${e.reasonCode}\` | ${e.detail} |`;
     }
   );
 
@@ -123,6 +192,12 @@ export function generateMarkdownReport(
     "",
     `- **Outcome:** \`${jsonReport.outcome}\``,
     `- **State:** \`${jsonReport.state}\``,
+    ...(manifest.config.workingDirectory && manifest.config.workingDirectory !== "."
+      ? [`- **Workspace Directory:** \`${manifest.config.workingDirectory}\``]
+      : []),
+    ...(jsonReport.pathScope
+      ? [`- **Path Scope:** ${jsonReport.pathScope.map((p) => `\`${p}\``).join(", ")}`]
+      : []),
     ...(manifest.config.terms
       ? [`- **Bisect Terms:** \`${manifest.config.terms.old}\` (old/good) / \`${manifest.config.terms.new}\` (new/bad)`]
       : []),
@@ -133,6 +208,26 @@ export function generateMarkdownReport(
       : []),
     ...(jsonReport.parentSha ? [`- **Verified Good Parent:** \`${jsonReport.parentSha}\``] : []),
     `- **Summary:** ${jsonReport.explanation}`,
+    ...(jsonReport.benchmark
+      ? [
+          "",
+          "## Benchmark Performance Summary",
+          "",
+          `- **Metric:** \`${jsonReport.benchmark.metric}\`${jsonReport.benchmark.unit ? ` (${jsonReport.benchmark.unit})` : ""}`,
+          ...(jsonReport.benchmark.baseline
+            ? [`- **Baseline Mean:** \`${jsonReport.benchmark.baseline.mean.toFixed(2)}\` (p50: \`${jsonReport.benchmark.baseline.median.toFixed(2)}\`, p95: \`${jsonReport.benchmark.baseline.p95.toFixed(2)}\`, p99: \`${jsonReport.benchmark.baseline.p99.toFixed(2)}\`, stdDev: \`${jsonReport.benchmark.baseline.stdDev.toFixed(2)}\`)`]
+            : []),
+          ...(jsonReport.benchmark.candidate
+            ? [`- **Candidate Mean:** \`${jsonReport.benchmark.candidate.mean.toFixed(2)}\``]
+            : []),
+          ...(jsonReport.benchmark.relativeDelta !== undefined
+            ? [`- **Shift:** \`${jsonReport.benchmark.relativeDelta >= 0 ? "+" : ""}${(jsonReport.benchmark.relativeDelta * 100).toFixed(2)}%\` (\`${jsonReport.benchmark.absoluteDelta !== undefined && jsonReport.benchmark.absoluteDelta >= 0 ? "+" : ""}${jsonReport.benchmark.absoluteDelta?.toFixed(2) ?? "0"}\`)`]
+            : []),
+          ...(jsonReport.benchmark.pValue !== undefined
+            ? [`- **Statistical Significance:** Welch's t-test p = \`${jsonReport.benchmark.pValue.toFixed(5)}\` (${jsonReport.benchmark.isSignificant ? "Statistically Significant" : "Not Significant"})`]
+            : []),
+        ]
+      : []),
     "",
     "## Evaluated Revisions",
     "",
@@ -170,11 +265,18 @@ export function generateReproScript(manifest: SessionManifestV1): string {
       ? manifest.config.oracle.overlayFiles.map((rel) => `rm -f "$TMP_WT/${rel}"`)
       : [];
 
+  const workDirRel =
+    manifest.config.workingDirectory && manifest.config.workingDirectory !== "."
+      ? manifest.config.workingDirectory.replace(/\\/g, "/").replace(/^\.\//, "")
+      : "";
+  const cdTarget = workDirRel ? `"$TMP_WT/${workDirRel}"` : `"$TMP_WT"`;
+
   return [
     "#!/usr/bin/env bash",
     "# ==============================================================================",
     `# BisectPilot Standalone Reproducibility Script — Session ${manifest.id}`,
     "# Generated for automated regression reproduction without altering caller state",
+    ...(workDirRel ? [`# Target Workspace: ${manifest.config.workingDirectory}`] : []),
     `# Reference Ledger: ${manifest.ledgerPath}`,
     `# Reference Report: ${path.join(manifest.sessionDir, "report.json")}`,
     "# ==============================================================================",
@@ -226,13 +328,13 @@ export function generateReproScript(manifest: SessionManifestV1): string {
     'echo "Checking out parent commit $PARENT_SHA in isolated worktree..." >&2',
     'git -C "$REPO_ROOT" worktree add --detach "$TMP_WT" "$PARENT_SHA" >/dev/null',
     ...overlayCopyCommands,
-    `if (cd "$TMP_WT" && ${oracleCmd} >/dev/null 2>&1); then PARENT_RES="good"; else PARENT_RES="bad"; fi`,
+    `if (cd ${cdTarget} && ${oracleCmd} >/dev/null 2>&1); then PARENT_RES="good"; else PARENT_RES="bad"; fi`,
     ...overlayRemoveCommands,
     "",
     'echo "Checking out candidate commit $CANDIDATE_SHA in isolated worktree..." >&2',
     'git -C "$TMP_WT" checkout --detach "$CANDIDATE_SHA" >/dev/null',
     ...overlayCopyCommands,
-    `if (cd "$TMP_WT" && ${oracleCmd} >/dev/null 2>&1); then CANDIDATE_RES="good"; else CANDIDATE_RES="bad"; fi`,
+    `if (cd ${cdTarget} && ${oracleCmd} >/dev/null 2>&1); then CANDIDATE_RES="good"; else CANDIDATE_RES="bad"; fi`,
     ...overlayRemoveCommands,
     "",
     "# 4. Final outcome contract: parent: <result>, candidate: <result>",
@@ -253,22 +355,41 @@ export function writeSessionReportArtifacts(params: {
 }): {
   readonly markdownPath: string;
   readonly jsonPath: string;
+  readonly htmlPath: string;
   readonly reproScriptPath: string;
   readonly bisectLogPath?: string;
+  readonly githubSummaryAppended?: boolean;
 } {
   const dir = params.manifest.sessionDir;
   mkdirSync(dir, { recursive: true });
 
   const markdownPath = path.join(dir, "report.md");
   const jsonPath = path.join(dir, "report.json");
+  const htmlPath = path.join(dir, "report.html");
   const reproScriptPath = path.join(dir, "repro.sh");
 
-  writeFileSync(markdownPath, generateMarkdownReport(params.manifest, params.events), "utf-8");
-  writeFileSync(
-    jsonPath,
-    JSON.stringify(generateJsonReport(params.manifest, params.events), null, 2) + "\n",
-    "utf-8"
-  );
+  try {
+    writeFileSync(markdownPath, generateMarkdownReport(params.manifest, params.events), "utf-8");
+  } catch (error) {
+    defaultMetrics.reportGenerationFailuresTotal.inc({ format: "markdown" });
+    throw error;
+  }
+  try {
+    writeFileSync(
+      jsonPath,
+      JSON.stringify(generateJsonReport(params.manifest, params.events), null, 2) + "\n",
+      "utf-8"
+    );
+  } catch (error) {
+    defaultMetrics.reportGenerationFailuresTotal.inc({ format: "json" });
+    throw error;
+  }
+  try {
+    writeFileSync(htmlPath, generateHtmlReport(params.manifest, params.events), "utf-8");
+  } catch (error) {
+    defaultMetrics.reportGenerationFailuresTotal.inc({ format: "html" });
+    throw error;
+  }
   writeFileSync(reproScriptPath, generateReproScript(params.manifest), "utf-8");
   try {
     chmodSync(reproScriptPath, 0o755);
@@ -282,12 +403,23 @@ export function writeSessionReportArtifacts(params: {
     writeFileSync(bisectLogPath, params.bisectLogText + "\n", "utf-8");
   }
 
+  let githubSummaryAppended = false;
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const summaryMd = generateGitHubStepSummary(params.manifest, params.events);
+    const res = appendGitHubStepSummary(summaryMd);
+    githubSummaryAppended = res.written;
+  }
+
   return {
     markdownPath,
     jsonPath,
+    htmlPath,
     reproScriptPath,
     ...(bisectLogPath ? { bisectLogPath } : {}),
+    ...(githubSummaryAppended ? { githubSummaryAppended: true } : {}),
   };
 }
 
 export * from "./replay-adapter.js";
+export * from "./html-report.js";
+export * from "./github-summary.js";

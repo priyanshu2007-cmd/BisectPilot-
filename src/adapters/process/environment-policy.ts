@@ -64,3 +64,24 @@ export function buildRestrictedEnvironment(
 
   return env;
 }
+
+export function buildSandboxEnvironment(
+  policy: ExecutionPolicy,
+  parentEnv: NodeJS.ProcessEnv = process.env
+): Record<string, string> {
+  const env: Record<string, string> = {
+    ...DETERMINISTIC_ENV_DEFAULTS,
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    HOME: "/tmp",
+    TMPDIR: "/tmp",
+    TEMP: "/tmp",
+    TMP: "/tmp",
+    SHELL: "/bin/sh",
+  };
+  for (const allowedKey of policy.allowlistedEnvVars) {
+    if (isLikelySecretEnvName(allowedKey)) continue;
+    const value = parentEnv[allowedKey];
+    if (typeof value === "string") env[allowedKey] = value;
+  }
+  return env;
+}

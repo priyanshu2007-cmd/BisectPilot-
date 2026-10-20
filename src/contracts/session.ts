@@ -89,6 +89,9 @@ export interface SessionLockMetadata {
   readonly acquiredAt: string;
 }
 
+import type { BenchmarkStats } from "../domain/benchmark.js";
+import type { ClassificationKind, OracleReasonCode } from "./outcome.js";
+
 export interface SessionManifestV1 {
   readonly schemaVersion: 1;
   readonly id: string;
@@ -107,4 +110,47 @@ export interface SessionManifestV1 {
   readonly lastRecordedRevision?: string;
   readonly runnerVersion: string;
   readonly conclusion?: SessionConclusion;
+  readonly benchmarkBaseline?: BenchmarkStats;
+}
+
+export interface ClassifiedRevisionRecord {
+  readonly commitSha: string;
+  readonly classification: ClassificationKind;
+  readonly reasonCode: OracleReasonCode;
+  readonly gitExitCode: 0 | 1 | 125 | 128;
+  readonly detail: string;
+  readonly durationMs?: number;
+  readonly noisySampling?: {
+    readonly sampleCount: number;
+    readonly passedRuns: number;
+    readonly failedRuns: number;
+    readonly skippedRuns: number;
+    readonly posterior: number;
+    readonly confidenceThreshold: number;
+  };
+  readonly benchmark?: Record<string, unknown>;
+  readonly classifiedAt: string;
+}
+
+export interface SessionCheckpointV1 {
+  readonly schemaVersion: 1;
+  readonly sessionId: string;
+  readonly checkpointSeq: number;
+  readonly lastWalSeq: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly state: SessionState;
+  readonly searchPhase: "preflight" | "bisect" | "boundary_check" | "concluded";
+  readonly repository: SessionRepositoryMetadata;
+  readonly bounds: SessionBounds;
+  readonly configHash: string;
+  readonly config: BisectConfigV1;
+  readonly overlayHashes: Readonly<Record<string, string>>;
+  readonly classifications: Readonly<Record<string, ClassifiedRevisionRecord>>;
+  readonly testedRevisions: readonly string[];
+  readonly skipCount: number;
+  readonly lastRecordedRevision?: string;
+  readonly conclusion?: SessionConclusion;
+  readonly benchmarkBaseline?: BenchmarkStats;
+  readonly checksum: string;
 }

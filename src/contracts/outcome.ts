@@ -5,6 +5,9 @@
 
 export type ClassificationKind = "good" | "bad" | "skip" | "abort";
 
+import type { BenchmarkEvaluationResult, BenchmarkStats } from "../domain/benchmark.js";
+export type { BenchmarkEvaluationResult, BenchmarkStats };
+
 export type OracleReasonCode =
   | "oracle_passed"
   | "oracle_failed_expected_regression"
@@ -21,7 +24,17 @@ export type OracleReasonCode =
   | "toolchain_mismatch"
   | "worktree_not_clean"
   | "skip_budget_exceeded"
-  | "invalid_runner_config";
+  | "untestable_revision"
+  | "invalid_runner_config"
+  | "benchmark_regression_detected"
+  | "benchmark_within_tolerance"
+  | "benchmark_insufficient_samples"
+  | "benchmark_invalid_metric"
+  | "benchmark_inconclusive"
+  | "sandbox_runtime_unavailable"
+  | "sandbox_policy_rejected"
+  | "sandbox_image_unavailable"
+  | "sandbox_cleanup_failed";
 
 export interface OracleOutcome {
   readonly kind: ClassificationKind;
@@ -37,7 +50,9 @@ export interface OracleOutcome {
     readonly posterior: number;
     readonly confidenceThreshold: number;
   };
+  readonly benchmark?: BenchmarkEvaluationResult | BenchmarkStats;
 }
+
 
 /**
  * Native Git Bisect exit codes (Section 6.3 & 26.2).

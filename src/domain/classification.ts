@@ -29,6 +29,13 @@ export function classifyProcessInfrastructureError(
   result: ProcessRunResult,
   phaseLabel: "prepare" | "build" | "oracle"
 ): OracleOutcome | null {
+  if (result.sandboxFailureCode === "cleanup_failed") {
+    return makeOutcome(
+      "abort",
+      "sandbox_cleanup_failed",
+      `${phaseLabel} sandbox cleanup failed: ${result.sandboxFailureMessage ?? result.sandboxFailureCode}`
+    );
+  }
   if (result.cancelled || result.terminatedBy === "cancel") {
     return makeOutcome("abort", "cancelled", `${phaseLabel} cancelled by user or signal`);
   }
@@ -37,6 +44,18 @@ export function classifyProcessInfrastructureError(
       "skip",
       "timeout",
       `${phaseLabel} timed out after ${result.durationMs}ms`
+    );
+  }
+  if (result.sandboxFailureCode) {
+    const reasonCode = result.sandboxFailureCode === "image_unavailable"
+      ? "sandbox_image_unavailable"
+      : result.sandboxFailureCode === "policy_rejected"
+          ? "sandbox_policy_rejected"
+          : "sandbox_runtime_unavailable";
+    return makeOutcome(
+      "abort",
+      reasonCode,
+      `${phaseLabel} sandbox failed closed: ${result.sandboxFailureMessage ?? result.sandboxFailureCode}`
     );
   }
   if (result.spawnErrorCode) {

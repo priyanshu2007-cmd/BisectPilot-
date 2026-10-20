@@ -3,7 +3,7 @@
  * Owner: Shared (Agent A + Agent B). Changes require ADR + docs/handoff.md sign-off.
  */
 
-export type RegressionProfile = "functional" | "build";
+export type RegressionProfile = "functional" | "build" | "performance";
 
 export type FailurePolicy = "skip" | "abort" | "bad";
 
@@ -47,6 +47,26 @@ export interface NoisyOraclePolicy {
   readonly flakeRate?: number;
 }
 
+export type SandboxRuntime = "docker" | "podman";
+
+export interface SandboxResourceLimits {
+  readonly cpus: number;
+  readonly memoryMb: number;
+  readonly pidsLimit: number;
+  readonly tmpfsMb: number;
+}
+
+/**
+ * Opt-in hardened execution policy. The image must be a digest-pinned local
+ * image; runtime probing never pulls images or falls back to host execution.
+ */
+export interface ContainerSandboxPolicy {
+  readonly runtime: SandboxRuntime;
+  readonly image: string;
+  readonly network: "none";
+  readonly resources: SandboxResourceLimits;
+}
+
 export interface ExecutionPolicy {
   readonly maxOutputBytesPerCommand: number;
   readonly maxRetries: number;
@@ -61,13 +81,19 @@ export interface ExecutionPolicy {
   readonly interactivePrompt?: boolean;
   readonly toolchainWrapper?: ToolchainWrapperSpec;
   readonly noisyOracle?: NoisyOraclePolicy;
+  readonly sandbox?: ContainerSandboxPolicy;
 }
+
+import { validateWorkspacePath } from "../domain/workspace.js";
+import type { BenchmarkSpec, BenchmarkDirection } from "../domain/benchmark.js";
+export type { BenchmarkSpec, BenchmarkDirection };
 
 export interface BisectConfigV1 {
   readonly schemaVersion: 1;
   readonly profile: RegressionProfile;
   readonly repositoryRoot: string;
   readonly workingDirectory: string;
+  readonly pathScope?: readonly string[];
   readonly goodRef: string;
   readonly badRef: string;
   readonly terms?: CustomBisectTerms;
@@ -76,7 +102,9 @@ export interface BisectConfigV1 {
   readonly oracle: OracleSpec;
   readonly execution: ExecutionPolicy;
   readonly sessionRootDir?: string;
+  readonly benchmark?: BenchmarkSpec;
 }
+
 
 export interface ConfigValidationIssue {
   readonly path: string;
@@ -159,6 +187,67 @@ export const DEFAULT_EXECUTION_POLICY: ExecutionPolicy = Object.freeze({
   interactivePrompt: false,
 });
 
+const SANDBOX_IMAGE_PATTERN = /^[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$/;
+const SANDBOX_SECRET_ENV_PATTERN = /(TOKEN|SECRET|PASSWORD|PRIVATE_KEY|AWS_|GCP_|AZURE_|API_KEY)/i;
+
+function isSafeRelativePath(value: string): boolean {
+  const normalized = value.trim().replaceAll("\\", "/");
+  if (normalized.length === 0 || normalized.includes("\0") || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized)) return false;
+  let depth = 0;
+  for (const segment of normalized.split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      depth -= 1;
+      if (depth < 0) return false;
+    } else {
+      depth += 1;
+    }
+  }
+  return depth > 0;
+}
+
+function validateSandboxPolicy(raw: unknown, issues: ConfigValidationIssue[]): ContainerSandboxPolicy | undefined {
+  if (!raw || typeof raw !== "object") {
+    issues.push({ path: "execution.sandbox", message: "sandbox must be an object" });
+    return undefined;
+  }
+  const obj = raw as Record<string, unknown>;
+  const runtime = obj.runtime;
+  if (runtime !== "docker" && runtime !== "podman") {
+    issues.push({ path: "execution.sandbox.runtime", message: 'runtime must be "docker" or "podman"' });
+  }
+  const image = typeof obj.image === "string" ? obj.image.trim() : "";
+  if (!SANDBOX_IMAGE_PATTERN.test(image)) {
+    issues.push({
+      path: "execution.sandbox.image",
+      message: "image must be a lowercase digest-pinned reference such as ghcr.io/org/image@sha256:<64 hex chars>",
+    });
+  }
+  if (obj.network !== undefined && obj.network !== "none") {
+    issues.push({ path: "execution.sandbox.network", message: 'sandbox network policy must be "none"' });
+  }
+  const rawResources = obj.resources === undefined ? {} : obj.resources;
+  if (!rawResources || typeof rawResources !== "object") {
+    issues.push({ path: "execution.sandbox.resources", message: "resources must be an object" });
+  }
+  const resources = (rawResources && typeof rawResources === "object" ? rawResources : {}) as Record<string, unknown>;
+  const cpus = typeof resources.cpus === "number" ? resources.cpus : 1;
+  const memoryMb = typeof resources.memoryMb === "number" ? resources.memoryMb : 512;
+  const pidsLimit = typeof resources.pidsLimit === "number" ? resources.pidsLimit : 256;
+  const tmpfsMb = typeof resources.tmpfsMb === "number" ? resources.tmpfsMb : 128;
+  if (!Number.isFinite(cpus) || cpus <= 0 || cpus > 64) issues.push({ path: "execution.sandbox.resources.cpus", message: "cpus must be > 0 and <= 64" });
+  if (!Number.isInteger(memoryMb) || memoryMb < 16 || memoryMb > 65_536) issues.push({ path: "execution.sandbox.resources.memoryMb", message: "memoryMb must be an integer from 16 to 65536" });
+  if (!Number.isInteger(pidsLimit) || pidsLimit < 16 || pidsLimit > 4_096) issues.push({ path: "execution.sandbox.resources.pidsLimit", message: "pidsLimit must be an integer from 16 to 4096" });
+  if (!Number.isInteger(tmpfsMb) || tmpfsMb < 16 || tmpfsMb > 4_096) issues.push({ path: "execution.sandbox.resources.tmpfsMb", message: "tmpfsMb must be an integer from 16 to 4096" });
+  if (runtime !== "docker" && runtime !== "podman") return undefined;
+  return {
+    runtime,
+    image,
+    network: "none",
+    resources: { cpus, memoryMb, pidsLimit, tmpfsMb },
+  };
+}
+
 function validateCommandSpec(
   raw: unknown,
   basePath: string,
@@ -201,13 +290,37 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
   if (obj.schemaVersion !== 1) {
     issues.push({ path: "schemaVersion", message: "schemaVersion must be 1" });
   }
-  if (obj.profile !== "functional" && obj.profile !== "build") {
-    issues.push({ path: "profile", message: 'profile must be "functional" or "build"' });
+  if (obj.profile !== "functional" && obj.profile !== "build" && obj.profile !== "performance") {
+    issues.push({ path: "profile", message: 'profile must be "functional", "build", or "performance"' });
   }
   if (typeof obj.repositoryRoot !== "string" || obj.repositoryRoot.trim().length === 0) {
+
     issues.push({ path: "repositoryRoot", message: "repositoryRoot must be a non-empty string" });
   }
-  const workingDirectory = typeof obj.workingDirectory === "string" ? obj.workingDirectory : ".";
+  const rawWorkingDir = typeof obj.workingDirectory === "string" ? obj.workingDirectory : ".";
+  let workingDirectory = ".";
+  if (typeof obj.repositoryRoot === "string" && obj.repositoryRoot.trim().length > 0) {
+    const wsVal = validateWorkspacePath(obj.repositoryRoot, rawWorkingDir);
+    if (!wsVal.ok) {
+      issues.push({ path: "workingDirectory", message: wsVal.error ?? "Invalid workspace path" });
+    } else {
+      workingDirectory = wsVal.relativePath;
+    }
+  } else {
+    workingDirectory = rawWorkingDir;
+  }
+
+  let pathScope: readonly string[] | undefined;
+  if (obj.pathScope !== undefined) {
+    if (
+      !Array.isArray(obj.pathScope) ||
+      !obj.pathScope.every((item) => typeof item === "string" && item.trim().length > 0)
+    ) {
+      issues.push({ path: "pathScope", message: "pathScope must be an array of non-empty strings" });
+    } else {
+      pathScope = (obj.pathScope as string[]).map((s) => s.trim());
+    }
+  }
   if (typeof obj.goodRef !== "string" || obj.goodRef.trim().length === 0) {
     issues.push({ path: "goodRef", message: "goodRef must be a non-empty string" });
   }
@@ -267,7 +380,7 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
       if (
         !Array.isArray(oObj.overlayFiles) ||
         oObj.overlayFiles.length === 0 ||
-        !oObj.overlayFiles.every((f) => typeof f === "string" && f.trim().length > 0)
+        !oObj.overlayFiles.every((f) => typeof f === "string" && isSafeRelativePath(f))
       ) {
         issues.push({
           path: "oracle.overlayFiles",
@@ -283,6 +396,9 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
       });
     }
     if (oCmd && (mode === "in-tree" || mode === "overlay" || mode === "external")) {
+      if (oObj.externalScriptPath !== undefined && (typeof oObj.externalScriptPath !== "string" || !isSafeRelativePath(oObj.externalScriptPath))) {
+        issues.push({ path: "oracle.externalScriptPath", message: "externalScriptPath must be a safe relative path inside the repository" });
+      }
       oracle = {
         mode,
         command: oCmd,
@@ -294,6 +410,7 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
   }
 
   const rawExec = (obj.execution && typeof obj.execution === "object" ? obj.execution : {}) as Record<string, unknown>;
+  const sandbox = rawExec.sandbox !== undefined ? validateSandboxPolicy(rawExec.sandbox, issues) : undefined;
   const execution: ExecutionPolicy = {
     maxOutputBytesPerCommand:
       typeof rawExec.maxOutputBytesPerCommand === "number"
@@ -364,7 +481,18 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
           },
         }
       : {}),
+    ...(sandbox ? { sandbox } : {}),
   };
+
+  if (sandbox && execution.interactivePrompt) {
+    issues.push({ path: "execution.interactivePrompt", message: "interactivePrompt is not supported inside a headless container sandbox" });
+  }
+  if (sandbox && execution.envOverrides && Object.keys(execution.envOverrides).length > 0) {
+    issues.push({ path: "execution.envOverrides", message: "envOverrides are not allowed in sandbox mode; use non-secret allowlisted variables" });
+  }
+  if (sandbox && execution.allowlistedEnvVars.some((name) => SANDBOX_SECRET_ENV_PATTERN.test(name))) {
+    issues.push({ path: "execution.allowlistedEnvVars", message: "sandbox allowlistedEnvVars cannot include likely secret names" });
+  }
 
   if (execution.maxOutputBytesPerCommand <= 0) {
     issues.push({ path: "execution.maxOutputBytesPerCommand", message: "Must be > 0" });
@@ -402,6 +530,78 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
     }
   }
 
+  let benchmark: BenchmarkSpec | undefined;
+  if (obj.profile === "performance" || obj.benchmark !== undefined) {
+    if (!obj.benchmark || typeof obj.benchmark !== "object") {
+      issues.push({ path: "benchmark", message: 'benchmark configuration is required when profile is "performance"' });
+    } else {
+      const bObj = obj.benchmark as Record<string, unknown>;
+      const metric = typeof bObj.metric === "string" ? bObj.metric.trim() : "";
+      if (metric.length === 0) {
+        issues.push({ path: "benchmark.metric", message: "metric must be a non-empty string" });
+      }
+      const unit = typeof bObj.unit === "string" && bObj.unit.trim().length > 0 ? bObj.unit.trim() : undefined;
+
+      let threshold: number | undefined;
+      if (bObj.threshold !== undefined) {
+        if (typeof bObj.threshold !== "number" || !Number.isFinite(bObj.threshold)) {
+          issues.push({ path: "benchmark.threshold", message: "threshold must be a finite number" });
+        } else {
+          threshold = bObj.threshold;
+        }
+      }
+
+      let relativeRegression: number | undefined;
+      if (bObj.relativeRegression !== undefined) {
+        if (typeof bObj.relativeRegression !== "number" || !Number.isFinite(bObj.relativeRegression) || bObj.relativeRegression < 0) {
+          issues.push({ path: "benchmark.relativeRegression", message: "relativeRegression must be a non-negative number" });
+        } else {
+          relativeRegression = bObj.relativeRegression > 1.0 ? bObj.relativeRegression / 100 : bObj.relativeRegression;
+        }
+      }
+
+      const direction: BenchmarkDirection =
+        bObj.direction === "lower_is_worse" ? "lower_is_worse" : "higher_is_worse";
+      if (bObj.direction !== undefined && bObj.direction !== "higher_is_worse" && bObj.direction !== "lower_is_worse") {
+        issues.push({ path: "benchmark.direction", message: 'direction must be "higher_is_worse" or "lower_is_worse"' });
+      }
+
+      const warmup = typeof bObj.warmup === "number" && Number.isInteger(bObj.warmup) && bObj.warmup >= 0 ? bObj.warmup : 1;
+      if (bObj.warmup !== undefined && (typeof bObj.warmup !== "number" || !Number.isInteger(bObj.warmup) || bObj.warmup < 0)) {
+        issues.push({ path: "benchmark.warmup", message: "warmup must be an integer >= 0" });
+      }
+
+      const minSamples = typeof bObj.minSamples === "number" && Number.isInteger(bObj.minSamples) && bObj.minSamples >= 1 ? bObj.minSamples : 3;
+      if (bObj.minSamples !== undefined && (typeof bObj.minSamples !== "number" || !Number.isInteger(bObj.minSamples) || bObj.minSamples < 1)) {
+        issues.push({ path: "benchmark.minSamples", message: "minSamples must be an integer >= 1" });
+      }
+
+      const maxSamples = typeof bObj.maxSamples === "number" && Number.isInteger(bObj.maxSamples) && bObj.maxSamples >= minSamples ? bObj.maxSamples : Math.max(10, minSamples);
+      if (bObj.maxSamples !== undefined && (typeof bObj.maxSamples !== "number" || !Number.isInteger(bObj.maxSamples) || bObj.maxSamples < minSamples)) {
+        issues.push({ path: "benchmark.maxSamples", message: `maxSamples must be an integer >= minSamples (${minSamples})` });
+      }
+
+      const alpha = typeof bObj.alpha === "number" && Number.isFinite(bObj.alpha) && bObj.alpha > 0 && bObj.alpha <= 0.5 ? bObj.alpha : 0.05;
+      if (bObj.alpha !== undefined && (typeof bObj.alpha !== "number" || !Number.isFinite(bObj.alpha) || bObj.alpha <= 0 || bObj.alpha > 0.5)) {
+        issues.push({ path: "benchmark.alpha", message: "alpha must be a number between 0 and 0.5" });
+      }
+
+      if (metric.length > 0) {
+        benchmark = {
+          metric,
+          ...(unit ? { unit } : {}),
+          ...(threshold !== undefined ? { threshold } : {}),
+          ...(relativeRegression !== undefined ? { relativeRegression } : {}),
+          direction,
+          warmup,
+          minSamples,
+          maxSamples,
+          alpha,
+        };
+      }
+    }
+  }
+
   if (issues.length > 0 || !oracle) {
     return { ok: false, issues };
   }
@@ -413,6 +613,7 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
       profile: obj.profile as RegressionProfile,
       repositoryRoot: obj.repositoryRoot as string,
       workingDirectory,
+      ...(pathScope ? { pathScope } : {}),
       goodRef: obj.goodRef as string,
       badRef: obj.badRef as string,
       ...(terms ? { terms } : {}),
@@ -421,6 +622,7 @@ export function validateConfig(raw: unknown): ConfigValidationResult {
       oracle,
       execution,
       ...(typeof obj.sessionRootDir === "string" ? { sessionRootDir: obj.sessionRootDir } : {}),
+      ...(benchmark ? { benchmark } : {}),
     },
   };
 }

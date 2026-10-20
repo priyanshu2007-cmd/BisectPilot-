@@ -34,6 +34,33 @@ jobs:
       - name: Run test suite
         run: npm test
 
+      - name: Verify npm packaging dry run
+        run: npm pack --dry-run
+
+      - name: Run Python CLI tests
+        if: runner.os != 'Windows'
+        run: npm run test:py
+
+      - name: Verify Rootless Container Runtime and Run Real Container Sandbox Test
+        if: runner.os == 'Linux'
+        run: |
+          if command -v podman >/dev/null 2>&1; then
+            echo "Inspecting Podman rootless status..."
+            ROOTLESS=$(podman info --format json | jq -r '.host.security.rootless // false')
+            echo "Podman rootless state: $ROOTLESS"
+            if [ "$ROOTLESS" = "true" ]; then
+              echo "Pulling minimal alpine image..."
+              podman pull alpine:latest
+              IMAGE_DIGEST=$(podman inspect alpine:latest --format '{{index .RepoDigests 0}}')
+              echo "Using digest-pinned image: $IMAGE_DIGEST"
+              BISECTPILOT_SANDBOX_RUNTIME=podman BISECTPILOT_SANDBOX_IMAGE="$IMAGE_DIGEST" node --test dist/tests/integration/sandbox-runtime.test.js
+            else
+              echo "Podman is not running in rootless mode on this runner."
+            fi
+          else
+            echo "Podman is not installed on this runner."
+          fi
+
       - name: Test website build & tests
         if: runner.os != 'Windows'
         run: |

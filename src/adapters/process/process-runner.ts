@@ -1,7 +1,14 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { CommandSpec, ExecutionPolicy, ToolchainWrapperSpec } from "../../contracts/index.js";
-import { buildRestrictedEnvironment } from "./environment-policy.js";
+import { buildRestrictedEnvironment, buildSandboxEnvironment } from "./environment-policy.js";
+import {
+  runSandboxedProcess,
+  type SandboxFailureCode,
+  type SandboxMount,
+  type SandboxRuntimeExecutor,
+  type SandboxMetadata,
+} from "./sandbox-runtime.js";
 
 export interface ProcessRunOptions {
   readonly commandSpec: CommandSpec;
@@ -10,6 +17,12 @@ export interface ProcessRunOptions {
   readonly abortSignal?: AbortSignal;
   readonly killGraceMs?: number;
   readonly detectedToolchainVersion?: string;
+  readonly workspaceRoot?: string;
+  readonly sandboxMounts?: readonly SandboxMount[];
+  readonly sandboxAllowedReadOnlyRoots?: readonly string[];
+  readonly sandboxOwnerId?: string;
+  readonly sandboxRuntimeExecutor?: SandboxRuntimeExecutor;
+  readonly sandboxOnContainerCreated?: (metadata: SandboxMetadata) => void | Promise<void>;
 }
 
 export function applyToolchainWrapper(
@@ -49,6 +62,11 @@ export interface ProcessRunResult {
   readonly truncatedStderr: boolean;
   readonly stdoutSha256: string;
   readonly stderrSha256: string;
+  readonly stdoutBytes?: number;
+  readonly stderrBytes?: number;
+  readonly sandbox?: SandboxMetadata;
+  readonly sandboxFailureCode?: SandboxFailureCode;
+  readonly sandboxFailureMessage?: string;
 }
 
 export function terminateProcessTree(
@@ -111,6 +129,69 @@ export async function runSafeProcess(options: ProcessRunOptions): Promise<Proces
   const maxBytes = options.executionPolicy.maxOutputBytesPerCommand;
   const graceMs = options.killGraceMs ?? 5_000;
   const isPosix = process.platform !== "win32";
+
+  if (options.executionPolicy.sandbox) {
+    if (!options.workspaceRoot) {
+      return {
+        executable,
+        args,
+        exitCode: null,
+        signal: null,
+        durationMs: Math.max(0, Date.now() - startTime),
+        timedOut: false,
+        cancelled: false,
+        stdout: "",
+        stderr: "",
+        truncatedStdout: false,
+        truncatedStderr: false,
+        stdoutSha256: createHash("sha256").update("").digest("hex"),
+        stderrSha256: createHash("sha256").update("").digest("hex"),
+        sandboxFailureCode: "policy_rejected",
+        sandboxFailureMessage: "Sandbox execution requires an approved workspaceRoot",
+      };
+    }
+    const sandboxExecutable = rawCommand === "node" ? "node" : executable;
+    const sandboxResult = await runSandboxedProcess({
+      policy: options.executionPolicy.sandbox,
+      workspaceRoot: options.workspaceRoot,
+      cwd: options.cwd,
+      command: sandboxExecutable,
+      args,
+      env: buildSandboxEnvironment(options.executionPolicy),
+      mounts: options.sandboxMounts,
+      allowedReadOnlyRoots: options.sandboxAllowedReadOnlyRoots,
+      timeoutMs: options.commandSpec.timeoutMs,
+      killGraceMs: graceMs,
+      abortSignal: options.abortSignal,
+      ownerId: options.sandboxOwnerId,
+      executor: options.sandboxRuntimeExecutor,
+      maxOutputBytes: maxBytes,
+      onContainerCreated: options.sandboxOnContainerCreated,
+    });
+    const stdoutBuffer = Buffer.from(sandboxResult.stdout, "utf8");
+    const stderrBuffer = Buffer.from(sandboxResult.stderr, "utf8");
+    return {
+      executable: sandboxExecutable,
+      args,
+      exitCode: sandboxResult.exitCode,
+      signal: sandboxResult.signal,
+      durationMs: Math.max(0, Date.now() - startTime),
+      timedOut: sandboxResult.timedOut,
+      cancelled: sandboxResult.cancelled,
+      ...(sandboxResult.terminatedBy ? { terminatedBy: sandboxResult.terminatedBy } : {}),
+      stdout: stdoutBuffer.subarray(0, maxBytes).toString("utf8"),
+      stderr: stderrBuffer.subarray(0, maxBytes).toString("utf8"),
+      truncatedStdout: stdoutBuffer.byteLength > maxBytes || sandboxResult.truncatedStdout,
+      truncatedStderr: stderrBuffer.byteLength > maxBytes || sandboxResult.truncatedStderr,
+      stdoutSha256: sandboxResult.stdoutSha256,
+      stderrSha256: sandboxResult.stderrSha256,
+      stdoutBytes: sandboxResult.stdoutBytes,
+      stderrBytes: sandboxResult.stderrBytes,
+      sandbox: sandboxResult.sandbox,
+      ...(sandboxResult.sandboxFailureCode ? { sandboxFailureCode: sandboxResult.sandboxFailureCode } : {}),
+      ...(sandboxResult.sandboxFailureMessage ? { sandboxFailureMessage: sandboxResult.sandboxFailureMessage } : {}),
+    };
+  }
 
   const env = buildRestrictedEnvironment(options.executionPolicy);
 
