@@ -265,6 +265,11 @@ export async function runCli(
     return 0;
   }
 
+  if (args.includes("--version") || args.includes("-v")) {
+    process.stdout.write("0.1.0\n");
+    return 0;
+  }
+
   const engine = engineOverride ?? new LocalBisectEngine();
   const cmd = args[0];
 
