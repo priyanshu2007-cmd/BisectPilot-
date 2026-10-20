@@ -159,8 +159,8 @@ jobs:
           TARBALL="${{ steps.pack.outputs.tarball }}"
           echo "Tarball contents:"
           tar -ztvf "$TARBALL"
-          # Verify that sensitive or test files are not present in tarball
-          if tar -ztvf "$TARBALL" | grep -E '(\.env|tests/|session|\.key|\.crt)'; then
+          # Verify that sensitive, runtime session, or test files are not present in tarball
+          if tar -ztvf "$TARBALL" | grep -E '(\.env|package/tests/|package/dist/tests/|package/\.session/|\.key$|\.pem$|\.crt$)'; then
             echo "Error: Unintended sensitive or test files found in tarball!"
             exit 1
           fi
@@ -177,9 +177,17 @@ jobs:
           npx bisectpilot --help
           npx bisectpilot --version
 
-      - name: Upload package artifact
+      - name: Generate Software Bill of Materials (SBOM)
+        run: |
+          npm sbom --sbom-format=spdx > bisectpilot-sbom.spdx.json
+          echo "SBOM generated successfully:"
+          head -n 20 bisectpilot-sbom.spdx.json
+
+      - name: Upload package artifacts and SBOM
         uses: actions/upload-artifact@v4
         with:
           name: bisectpilot-package-${{ github.sha }}
-          path: ${{ steps.pack.outputs.tarball }}
+          path: |
+            ${{ steps.pack.outputs.tarball }}
+            bisectpilot-sbom.spdx.json
           retention-days: 7

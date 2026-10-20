@@ -38,9 +38,9 @@
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.json && node scripts/run-tests.mjs",
-    "test:unit": "tsc -p tsconfig.json && node --test \"dist/tests/unit/*.test.js\"",
-    "test:integration": "tsc -p tsconfig.json && node --test \"dist/tests/integration/*.test.js\"",
-    "test:safety": "tsc -p tsconfig.json && node --test \"dist/tests/safety/*.test.js\"",
+    "test:unit": "tsc -p tsconfig.json && node scripts/run-tests.mjs unit",
+    "test:integration": "tsc -p tsconfig.json && node scripts/run-tests.mjs integration",
+    "test:safety": "tsc -p tsconfig.json && node scripts/run-tests.mjs safety",
     "test:py": "PYTHONPATH=src python3 -m unittest discover -s tests -v"
   },
   "devDependencies": {
