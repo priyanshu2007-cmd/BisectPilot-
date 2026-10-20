@@ -166,10 +166,33 @@ npm pack
 
 ## Session Recovery
 
-Each session keeps a hash-chained `events.jsonl` ledger plus `checkpoint.json` / `checkpoint.backup.json`. After a crash run `bisectpilot status <sessionId>` (shows checkpoint seq, classified count, resumable) then `bisectpilot resume <sessionId>`. Revisions already classified are reused, not re-run. If the checkpoint is corrupt it is rebuilt from the ledger; if the ledger itself is tampered with, resume stops with an error. Durability covers process crashes, not power loss.
+Each session maintains an append-only, SHA-256 hash-chained `ledger.jsonl` (WAL) alongside atomic `checkpoint.json` and `checkpoint.backup.json` snapshots.
+- **Durable Writes**: Checkpoints are written to process temporary files, flushed to storage with `fsyncSync`, atomically replaced, and the containing directory descriptor is synchronized on POSIX systems.
+- **Process Crash vs. OS Crash**: Process crashes (SIGKILL) are 100% crash-consistent and resume safely. OS crash and power-loss protection is best-effort via temporary-file and directory `fsync`; if hardware write caching ignores flush, recovery falls back to `checkpoint.backup.json` or reconstructs the state from `ledger.jsonl`.
+- **Resume Workflow**: After an unexpected exit, inspect the session with `bisectpilot status <sessionId>` to view checkpoint sequence, classified commit count, and whether recovery is safe. Run `bisectpilot resume <sessionId>` to restart native `git bisect run`. Revisions already classified in the checkpoint cache are reused instantly without re-running tests or sandboxes.
+- **Blocked Recovery**: Resumption is blocked with a clear error if an active PID holds the session lock, if the checkpoint refers to a different repository, if worktree ownership markers are missing, if the WAL hash chain is broken, or if the checkpoint uses an unsupported schema version. All user checkouts and ledger artifacts are strictly preserved.
 
 ## Status & Roadmap
 
-Implemented: native Git Bisect engine, noisy-oracle sampling, performance mode (Welch + Mann-Whitney), workspaces, reports (JSON/MD/HTML/GitHub), daemon + durable queue, mTLS workers, rootless sandbox, distributed sampling, Prometheus/tracing, session recovery.
+Implemented & Locally Verified:
+- Native Git Bisect engine, `--good auto` discovery, noisy-oracle Bayesian SPRT sampling.
+- Monorepo workspace scoping (`--cwd`, `--scope`), dependency hashing, and monorepo preflight.
+- Performance bisection mode with Welch's t-test and Mann-Whitney U test.
+- Reports: JSON, Markdown, standalone interactive offline HTML, and GitHub Actions step summaries.
+- Local daemon and pull-worker fleet coordination, lease fencing, and heartbeats.
+- Mutual TLS (mTLS) with Subject CN verification, dynamic context rotation, and certificate revocation.
+- Digest-pinned rootless container sandbox with Docker/Podman runtime discovery.
+- Observability: W3C Trace Context propagation, Prometheus `/metrics`, and Grafana dashboard templates.
+- Durable checkpointing (`fsyncSync`), tri-level recovery fallback, and SIGKILL process-kill integration tests.
+- Standalone multi-machine mTLS deployment runbook (`docs/multimachine-mtls-setup.md`).
 
-Still to do: verification on real Linux/Windows CI and multi-machine TLS, fsync-level durability and process-kill crash tests, optional OTLP exporter, website workspace-scope display, CHANGELOG/CONTRIBUTING, npm provenance setup. See `docs/handoff.md`.
+Outstanding Release Blockers:
+- Native Windows CI: Blocked by Git tree entry with trailing space (`skills `) causing NTFS checkout failures (`Invalid argument`).
+- Linux Rootless Podman CI: Standard GitHub Actions hosted runner requires pre-configured rootless subuid/subgid mapping for container isolation tests.
+- Physical Multi-Machine mTLS: Automated on loopback (10/10 tests pass); physical deployment across separate hardware nodes remains unverified.
+
+P2 Deferred Post-Release Items:
+- Optional OpenTelemetry Collector OTLP exporter bridge.
+- Website Explorer workspace-scope display indicator.
+- Deeper native Windows process-tree (`taskkill.exe`) and daemon restart tests.
+- Open-source community files (CHANGELOG, CONTRIBUTING, issue templates, npm provenance).

@@ -6,16 +6,20 @@ It prevents `AI_BRAIN.md` from becoming bloated.
 
 ## Current Goal
 
-Complete Step 14 delivery: Automated Session Recovery, Master-Plan Audit & Release Readiness. Implement durable checkpoints, WAL sync, exact fast resume, daemon crash recovery, heavy-tailed statistical testing, and audit the repository against the master plan for release readiness.
+Complete Release Verification Milestone & Cross-Platform Hardening:
+- Verify fresh-clone isolated end-to-end bisection (`tests/integration/fresh-clone-e2e.test.ts`).
+- Execute and resolve P1 requirements (durability `fsyncSync`, process-kill SIGKILL crash tests, unsupported schema & wrong-repo rejection, CLI recovery documentation, multi-machine mTLS runbook).
+- Audit cross-platform status and declare verified blockers (Windows `skills ` trailing space, Linux rootless Podman CI).
+- Provide evidence-based status: `NOT_READY_BLOCKERS_REMAIN`.
 
-## Step 14 Working Context
+## Release Verification Working Context
 
-- Tri-level resilience architecture: `checkpoint.json` -> `checkpoint.backup.json` -> `reconstructed_from_wal` (using hash-chained append-only `events.jsonl`).
-- Deterministic checksum: SHA-256 computed on key-sorted JSON without `checksum` property and filtering `undefined` values.
-- Fast resume: `executeSingleBisectStep` checks `checkpoint.classifications[currentSha]` first; returns cached `gitExitCode` in milliseconds, avoiding rerun of tests or sandboxes for already classified commits.
-- Daemon recovery: `DaemonService.recoverActiveSessions()` discovers dead-process sessions on startup and marks them `needs_recovery`.
-- Non-parametric benchmark testing: `mannWhitneyUTest` and `erf` added in `src/domain/statistics.ts` for heavy-tailed or multimodal benchmark metrics.
-- Observability: `docs/grafana-dashboard.json` dashboard provisioning template added for Prometheus metrics exposition.
+- Fresh-clone bisection proof: isolated cloned repository with planted regression (`c3`), good (`c1`) and bad (`c4`) bounds, report consistency (JSON/MD/HTML), XSS escaping, timeout safety, and skip budget enforcement. All 3 tests pass.
+- Checkpoint durability: `src/session/checkpoint.ts` implements `fsyncSync` of temporary checkpoint files and directory metadata on POSIX. Process-crash consistency is 100% guaranteed; power loss is best-effort.
+- Subprocess SIGKILL crash tests: parent kills child process during active bisection; resume cleanly recovers state from checkpoint cache and finishes bisection to identical culprit.
+- Schema & Repo rejection: `schemaVersion: 99` rejects cleanly and recovers from WAL; wrong `commonGitDir` checkpoint aborts before mutating worktrees.
+- Multi-machine mTLS: `docs/multimachine-mtls-setup.md` provides full PKI generation, daemon and remote worker setup, fencing token validation, and network partition simulation. Loopback passes 10/10 tests; real physical deployment is marked `BLOCKED` / `UNVERIFIED`.
+- Recovery CLI documentation: `HELP_TEXT` updated with `needs_recovery`, `status`, and `resume` commands and blocked recovery conditions.
 
 ## Files Modified in Step 8
 
@@ -75,10 +79,12 @@ Latest verification:
 - Audit Export: `AuditEventExporter` interface with `InMemoryAuditEventExporter`, `FileAuditEventExporter`, and `WebhookAuditEventExporter`. Verifies tamper-evident ledger hash chain before exporting; rejects corrupted chains; prevents recursive telemetry loops.
 - Diagnostics: Daemon `/v1/status` augmented with `telemetry` (metricsEndpoint, tracingEnabled, registeredMetricsCount).
 
-Latest Step 12 verification:
-- `npm run build`: Compiled with 0 errors.
-- `npm test`: 199/199 tests passed across 21 suites (1 skipped on macOS).
-- `npm run test:py`: 4/4 passed.
-- `node --test dist/tests/integration/package-distribution.test.js`: 3/3 passed.
-- `npm pack --dry-run`: 138 files, 193.3 kB package size.
-- `git diff --check`: 0 issues.
+Latest Verification (Release Hardening Milestone):
+- `npm run build`: Compiled TypeScript with 0 errors (`tsc -p tsconfig.json`).
+- `npm test`: 229 tests across 29 suites (228 passed, 1 skipped on macOS for missing rootless container runtime, 0 failed, 14.7s).
+- `npm run test:py`: 4/4 tests passed (0.004s).
+- `node --test dist/tests/integration/package-distribution.test.js`: 3/3 passed (tarball creation, isolated external install, binary execution).
+- `npm pack --dry-run`: 144 files, 211.8 kB compressed, 1.1 MB unpacked.
+- `npm --prefix website run test`: 8/8 static pages rendered, 0 lint errors, Next.js build clean.
+- `git diff --check`: 0 formatting or whitespace issues.
+- Decision: `NOT_READY_BLOCKERS_REMAIN` (Windows checkout blocked by `skills ` trailing space; Linux rootless Podman CI unconfigured; multi-machine mTLS physical hardware unverified).

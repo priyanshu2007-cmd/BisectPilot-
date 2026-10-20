@@ -65,12 +65,21 @@ Do NOT store entire source files in this memory.
 - Step 9 local-first daemon, durable queue, atomic snapshots, leases, heartbeats, cancellation, and pull workers.
 - Step 10 opt-in rootless container sandbox with Docker/Podman runtime discovery and tamper-evident ledger tracking.
 - Step 11 mutual TLS (mTLS) for daemon and remote workers, Subject CN identity authorization, certificate fingerprint revocation, dynamic context rotation, and Linux rootless Podman CI.
+- Step 12 production observability: zero-dependency native W3C Trace Context (`traceparent`) propagation, Prometheus 0.0.4 text exposition registry (`/metrics`), tamper-evident audit event export (`AuditEventExporter`), and lifecycle metrics.
+- Step 13 distributed bisection fleet & multi-worker coordination: `JobType` extensions, capability matching, lease fencing tokens (`fencingToken`), parallel noisy-oracle sampling (`FleetCoordinator.scheduleNoisyOracleBatch`), parallel benchmark sampling, and fleet observability metrics.
+- Step 14 automated session recovery: versioned checksummed checkpoints (`checkpoint.json` / `checkpoint.backup.json`), tri-level fallback recovery (`primary` -> `backup` -> `reconstructed_from_wal`), fast resume via cached classifications, daemon startup dead-process recovery (`needs_recovery`), Mann-Whitney U rank-sum statistics (`mannWhitneyUTest`), and Grafana dashboard template.
+- Release Verification & Hardening Milestone: fresh-clone end-to-end bisection proof (`tests/integration/fresh-clone-e2e.test.ts`), `fsyncSync` checkpoint durability on POSIX, subprocess SIGKILL crash tests, unsupported schema (`schemaVersion: 99`) and wrong-repo rejection tests, multi-machine mTLS runbook (`docs/multimachine-mtls-setup.md`), and recovery CLI help documentation.
 
-### In Progress
-- Verification of native Windows container isolation and live multi-machine remote deployment.
+### In Progress / Blocked
+- Remediation of Git tree entry with trailing space (`skills `) causing Windows NTFS checkout failures.
+- Provisioning rootless subuid/subgid mapping on Linux CI runner for real rootless Podman test execution.
+- Physical multi-machine deployment across separate hosts (loopback mTLS verified 10/10).
 
-### Planned
-- Complete remaining master-plan sections as requested (e.g., Step 12 / Section 20-21 production observability & OpenTelemetry integration).
+### Planned (Post-Release P2)
+- Optional OpenTelemetry Collector OTLP exporter bridge.
+- Website Explorer workspace-scope display indicator.
+- Deeper native Windows process-tree (`taskkill.exe`) and daemon restart verification.
+- Open-source community files (CHANGELOG, CONTRIBUTING, issue templates, npm provenance).
 
 ## 6. Important APIs / Routes
 
@@ -100,8 +109,11 @@ No database configured yet. Update this section when database schemas/models are
 - Follow `token-saver` rules: search before reading, read narrow line ranges, bound command outputs.
 - Verify all changes with real commands (`testing-and-verification`).
 
-## 10. Current Known Issues
+## 10. Current Known Issues & Blockers
 
+- Windows Native CI: Git tree entry with trailing space `skills ` causes `actions/checkout@v4` on native Windows NTFS runners to fail with `Invalid argument`. Removal from git index required before Windows CI can execute.
+- Linux Rootless Podman CI: Standard GitHub Actions Ubuntu runner lacks user namespace subuid/subgid mapping for rootless container execution.
+- Physical Multi-Machine mTLS: Automated on loopback (10/10 tests pass); deployment across separate physical hosts is unverified due to lack of secondary physical machine in local environment. Runbook provided in `docs/multimachine-mtls-setup.md`.
 - Chrome remote debugging (`chrome://inspect/#remote-debugging`) requires manual opt-in in Chrome if interactive `browser-harness` automation is needed.
 - Playwright Python package is not installed in the current environment; browser smoke testing is pending. HTTP smoke checks pass.
 
@@ -112,9 +124,13 @@ No database configured yet. Update this section when database schemas/models are
 - 2026-10-19 — Updated `.vscode/settings.json` for ultra-clean Explorer mode (slimmed via `ponytail-review`), persisted `/learn` updates to `AI_RULES.md` and `.agents/skills/coding-and-debugging/SKILL.md`, and authored `SPEC.md` + `tasks/plan.md` + `tasks/todo.md` for `bisectpilot` CLI & `/explorer` trace integration.
 - 2026-10-20 — Organized and implemented the BisectPilot v3 microlithic TypeScript/Node.js engine (`src/contracts/`, `src/config/`, `src/domain/`, `src/git/`, `src/worktree/`, `src/process/`, `src/oracle/`, `src/ledger/`, `src/session/`, `src/runner/`, `src/reports/`, `src/application/`, `src/cli/`) while preserving `src/bisectpilot/__init__.py`, `website/`, and `ai-agent-toolkit/` intact. Verified with 13/13 TS unit/integration tests and 4/4 Python tests.
 - 2026-10-20 — Executed and validated all 72 AI skills across the repository under Ponytail rules, running comprehensive test, security, complexity, and frontend audits; generated root `SKILL_EXECUTION_REPORT.md` (57 PASS, 1 PARTIAL, 7 BLOCKED, 7 NOT APPLICABLE, 0 UNAVAILABLE, 0 FAILED).
-- 2026-10-20 — Added Step 9 local daemon/worker delivery: typed durable jobs and transitions, atomic queue snapshots, leases, heartbeats, cancellation, idempotent results, conservative recovery, authenticated bounded HTTP, loopback/TLS binding rules, pre-provisioned worker repository validation, `start --background`, CLI lifecycle commands, daemon ownership locking, and result-shape validation. Added unit/loopback coverage and updated README, architecture, safety and handoff docs.
+- 2026-10-20 — Added Step 9 local daemon/worker delivery: typed durable jobs and transitions, atomic queue snapshots, leases, heartbeats, cancellation, idempotent results, conservative recovery, authenticated bounded HTTP, loopback/TLS binding rules, pre-provisioned worker repository validation, `start --background`, CLI lifecycle commands, daemon ownership locking, and result-shape validation.
 - 2026-10-20 — Added Step 10 opt-in rootless sandbox boundary: digest-pinned local Docker/Podman policy, structured rootless/runtime/image preflight, no-network/read-only-root/capability/no-new-privilege/resource flags, safe mounts and environment filtering, ownership-checked cleanup, cancellation/timeout/output evidence, `sandbox_created` ledger provenance, worker capability discovery, CLI flags, path-confined oracle snapshots, deterministic fake-runtime tests and an explicitly skipped real-runtime integration test.
 - 2026-10-20 — Added Step 11 mutual TLS, remote worker authorization, dynamic credential rotation, administrative revocation (`/v1/admin/revoke` and `bisectpilot daemon revoke`), and Linux rootless Podman CI: bidirectional TLS verification, non-loopback mTLS enforcement, peer cert fingerprint/Subject CN extraction, in-flight revocation check, cross-worker lease protection, zero-downtime `setSecureContext` rotation, POSIX 0o600 key permissions, and 10 passing mTLS integration tests.
+- 2026-10-20 — Added Step 12 production observability: W3C Trace Context propagation, Prometheus `/metrics` exposition, tamper-evident audit event export, and lifecycle telemetry.
+- 2026-10-20 — Added Step 13 distributed bisection fleet & multi-worker coordination: capability matching, monotonic fencing tokens, parallel noisy-oracle sampling (`FleetCoordinator`), parallel benchmark sampling, and worker capacity gauges.
+- 2026-10-20 — Added Step 14 automated session recovery: versioned checksummed checkpoints, 3-tier fallback (`primary` -> `backup` -> `reconstructed_from_wal`), fast resume, daemon crash recovery (`needs_recovery`), Mann-Whitney U rank-sum test, and Grafana dashboard template.
+- 2026-10-20 — Executed Release Verification & Hardening Milestone: fresh-clone E2E bisection proof (`fresh-clone-e2e.test.ts`), `fsyncSync` checkpoint durability on POSIX in `src/session/checkpoint.ts`, subprocess SIGKILL crash tests, unsupported schema (`schemaVersion: 99`) and wrong-repo rejection tests in `tests/integration/session-resume-recovery.test.ts`, multi-machine mTLS runbook in `docs/multimachine-mtls-setup.md`, and updated CLI help documentation. Verified 229 tests (228 pass, 1 skip), 4/4 Python tests, 3/3 package-distribution tests, 8/8 website pages. Pushed commit `82b9497`.
 
 ## 12. Important File Map
 
@@ -125,10 +141,10 @@ Use this to decide what files should be opened.
 | Memory & Rules | `AI_RULES.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`, `ANTIGRAVITY_MASTER_PROMPT.txt` |
 | Agent Instructions | `AGENTS.md`, `CLAUDE.md` |
 | Editor Config | `.vscode/settings.json` |
-| Architecture & Safety Docs | `docs/architecture.md`, `docs/safety-model.md`, `docs/handoff.md`, `docs/decisions/0001-phase-g0-contracts-and-ts-scaffold.md` |
+| Architecture & Safety Docs | `docs/architecture.md`, `docs/safety-model.md`, `docs/handoff.md`, `docs/multimachine-mtls-setup.md`, `docs/decisions/0001-phase-g0-contracts-and-ts-scaffold.md` |
 | TS Microlithic Engine | `src/contracts/`, `src/git/`, `src/worktree/`, `src/process/`, `src/oracle/`, `src/ledger/`, `src/session/`, `src/runner/`, `src/application/`, `src/reports/`, `src/jobs/`, `src/daemon/`, `src/worker/`, `src/cli/` |
 | Observability & Telemetry | `src/telemetry/tracing.ts`, `src/telemetry/metrics.ts`, `src/telemetry/audit-exporter.ts`, `src/telemetry/index.ts` |
-| Test Suites & Fixtures | `tests/unit/`, `tests/integration/`, `tests/safety/`, `tests/fixtures/tls-certs.ts`, `tests/unit/telemetry.test.ts`, `tests/integration/telemetry-metrics.test.ts`, `tests/integration/mtls-remote-worker.test.ts` |
+| Test Suites & Fixtures | `tests/unit/`, `tests/integration/`, `tests/safety/`, `tests/fixtures/tls-certs.ts`, `tests/integration/fresh-clone-e2e.test.ts`, `tests/integration/session-resume-recovery.test.ts`, `tests/integration/mtls-remote-worker.test.ts` |
 | Python Trace Diff CLI | `src/bisectpilot/__init__.py`, `pyproject.toml`, `tests/test_bisectpilot.py` |
 | Skill Router | `ai-agent-toolkit/skills/skill-scout/SKILL.md`, `ai-agent-toolkit/MANIFEST.md` |
 | Skill Search & Setup | `ai-agent-toolkit/scripts/skill-search.sh`, `ai-agent-toolkit/scripts/setup-agent.sh`, `ai-agent-toolkit/scripts/install-skills.sh` |
@@ -138,54 +154,39 @@ Use this to decide what files should be opened.
 ## 13. Current Task Context
 
 Current task:
-Step 14 Automated Session Recovery, Master-Plan Audit & Release Readiness:
-1. Durable write-ahead log (WAL) and checkpoint snapshot mechanism (`src/session/checkpoint.ts`, `checkpoint.json`, `checkpoint.backup.json`, atomic rename, checksum calculation).
-2. Tri-level fallback recovery: primary `checkpoint.json` -> `checkpoint.backup.json` -> `reconstructed_from_wal` using hash-chained `events.jsonl`.
-3. Fast resume semantics: cached authoritative classifications in checkpoint are reused instantly by `executeSingleBisectStep`, skipping live test re-execution.
-4. Daemon crash recovery: `DaemonService.recoverActiveSessions()` on startup detects sessions with dead PIDs and transitions them to `needs_recovery`.
-5. Non-parametric statistical comparison for heavy-tailed benchmark distributions (`mannWhitneyUTest`, `erf` in `src/domain/statistics.ts`).
-6. Observability visualization provisioning template (`docs/grafana-dashboard.json`).
-7. Comprehensive test verification: `tests/unit/session-recovery.test.ts` (8/8 passing), `tests/integration/session-resume-recovery.test.ts` (2/2 passing).
-8. Release readiness: `npm test` (222/222 passing, 1 skipped), `npm run test:py` (4/4 passing), `node --test dist/tests/integration/package-distribution.test.js` (3/3 passing), `npm --prefix website run test` (8/8 static pages generated cleanly), `git diff --check` clean.
+Release Verification Milestone & Cross-Platform Hardening:
+1. Fresh-clone end-to-end bisection proof: isolated temporary Git repository, deterministic planted regression (`c3`), JSON/MD/HTML report consistency, HTML XSS escaping, oracle timeout safety, skip budget enforcement (`tests/integration/fresh-clone-e2e.test.ts`).
+2. Durable checkpoint writes: `fsyncSync` of temp checkpoint files and directory synchronization on POSIX in `src/session/checkpoint.ts`.
+3. Process-kill (SIGKILL) crash tests: subprocess termination at persistence write points and clean resumption in `tests/integration/session-resume-recovery.test.ts`.
+4. Schema & repository validation: rejected unsupported `schemaVersion: 99` and wrong-repository checkpoints before bisection mutation.
+5. Recovery documentation: updated CLI `HELP_TEXT`, `README.md`, `docs/architecture.md`, `docs/safety-model.md` with `needs_recovery` lifecycle and blocked-recovery conditions.
+6. Multi-machine mTLS runbook: created `docs/multimachine-mtls-setup.md` detailing dedicated PKI generation, daemon and remote worker deployment, fencing tokens, and network partition tests.
+7. Verification results: `npm test` passes 229 tests (228 pass, 1 skip on macOS); `npm run test:py` passes 4/4; `package-distribution.test.js` passes 3/3; `npm --prefix website run test` builds 8/8 static pages; `npm pack --dry-run` produces 144 files (211.8 kB); `git diff --check` clean.
+8. Release decision: `NOT_READY_BLOCKERS_REMAIN` (blocked by Git tree entry with trailing space `skills ` failing Windows checkout; Linux rootless Podman CI requiring user namespace setup; physical multi-machine deployment pending separate hardware).
 
 Relevant files:
-- `src/contracts/session.ts`
 - `src/session/checkpoint.ts`
-- `src/session/index.ts`
-- `src/runner/bisect-runner.ts`
-- `src/application/index.ts`
-- `src/daemon/index.ts`
-- `src/domain/statistics.ts`
-- `docs/grafana-dashboard.json`
-- `tests/unit/session-recovery.test.ts`
+- `src/cli/index.ts`
+- `docs/multimachine-mtls-setup.md`
+- `tests/integration/fresh-clone-e2e.test.ts`
 - `tests/integration/session-resume-recovery.test.ts`
+- `docs/architecture.md`
+- `docs/safety-model.md`
+- `docs/handoff.md`
 
 Do not open unrelated files.
 
 ## 14. Last Session Summary
 
-Step 13 implementation added:
-- `src/contracts/jobs.ts`: `JobType` union (`bisect` | `sample_evaluation` | `benchmark_sample`), `fencingToken` in `JobRecord` and `JobResult`, `sampleMetadata` in `JobRecord`, `sampleResult` in `JobResult`, `supportedProfiles`, `features`, and `environmentIdentity` in `WorkerCapabilities`, `ALLOWED_JOB_TRANSITIONS` updated for fast direct completion from `leased`.
-- `src/jobs/index.ts`: Capability matching (`isWorkerEligible`), `maxConcurrentJobs` enforcement in `claimNext()`, monotonic `fencingToken` generation, lease fencing validation in `heartbeat()` and `submitResult()`, terminal/expired/mismatched rejection recording in Prometheus metrics.
-- `src/jobs/fleet-coordinator.ts`: High-level multi-worker coordinator (`FleetCoordinator`), scheduling noisy-oracle sample batches with Bayesian SPRT early stopping, scheduling benchmark sample batches pinned to matching hardware `environmentIdentity` with Welch's t-test evaluation, batch cancellation, and fleet capacity inspection.
-- `src/daemon/index.ts` & `src/daemon/client.ts`: Extended registration parser to validate worker capabilities, updated polling to honor worker concurrency limits, verified fencing tokens in heartbeat and result submission routes, exported concurrency gauges, and forwarded `fencingToken` via `DaemonClient`.
-- `src/worker/index.ts`: Added fleet options (`jobTypes`, `maxConcurrentJobs`, `supportedProfiles`, `features`, `environmentIdentity`, `sampleEvaluator`), capability advertisement, and execution handler for sample evaluation and benchmark jobs with fencing token propagation.
-- `src/telemetry/metrics.ts`: Added bounded Prometheus metrics (`fleet_scheduling_delay_seconds`, `stale_results_rejected_total`, `samples_total`, `worker_disconnections_total`, `worker_concurrency_capacity`, `worker_concurrency_utilized`).
-- `src/index.ts`: Re-exported `FleetCoordinator`, `isWorkerEligible`, and fleet batch types.
-- Tests: `tests/unit/fleet-coordinator.test.ts` (11 unit tests for capability matching, concurrency limits, lease fencing, stale result rejection, Bayesian early stopping, Welch's t-test), `tests/integration/fleet-coordination.test.ts` (2 multi-worker loopback integration tests for parallel noisy-oracle sampling and lease fencing token rejection).
+Release Verification Milestone implementation added:
+- `src/session/checkpoint.ts`: Implemented `fsyncSync` on temporary checkpoint files before rename and POSIX directory descriptor `fsyncSync` to guarantee inode/directory entry durability across system crashes.
+- `src/cli/index.ts`: Extended CLI `HELP_TEXT` with documentation for `needs_recovery`, `bisectpilot status`, `bisectpilot resume`, and the 5 blocked-recovery failure modes.
+- `tests/integration/session-resume-recovery.test.ts`: Added SIGKILL crash tests during active bisection, unsupported `schemaVersion: 99` rejection tests, and wrong-repository checkpoint rejection tests.
+- `tests/integration/fresh-clone-e2e.test.ts`: Added fresh-clone isolated bisection suite verifying planted regression `c3`, good and bad bounds, JSON/MD/HTML report consistency, HTML XSS escaping, timeout safety, and skip budget enforcement.
+- `docs/multimachine-mtls-setup.md`: Authored complete multi-machine mTLS deployment and network partition simulation runbook.
+- Updated `README.md`, `docs/architecture.md`, `docs/safety-model.md`, `docs/handoff.md`, `tasks/plan.md`, `tasks/todo.md`.
 
-Step 14 implementation added:
-- `src/contracts/session.ts`: Added `ClassifiedRevisionRecord` and `SessionCheckpointV1` schemas.
-- `src/session/checkpoint.ts`: Implemented `writeSessionCheckpointAtomic`, `computeCheckpointChecksum`, `validateCheckpointIntegrity`, `readSessionCheckpoint` with 3-tier fallback (`primary` -> `backup` -> `reconstructed_from_wal`), `syncCheckpointWithWal` forward replay, and `recordRevisionClassificationCheckpoint`.
-- `src/session/index.ts`: Re-exported checkpoint module, updated `readSessionManifest` to auto-recover missing/corrupted manifests from checkpoint or WAL.
-- `src/runner/bisect-runner.ts`: Integrated fast-resume check in `executeSingleBisectStep` (`checkpoint.classifications[currentSha]`), returning cached exit code instantly and recording live classifications into checkpoint.
-- `src/application/index.ts`: Writes initial checkpoint on `start()`, syncs on state transitions, surfaces checkpoint summary in `status()`, and validates checkpoint on `resume()`.
-- `src/daemon/index.ts`: Added `recoverActiveSessions()` during daemon startup to reconcile active sessions against process health.
-- `src/domain/statistics.ts`: Implemented `mannWhitneyUTest` and `erf` for non-parametric rank-sum comparison on heavy-tailed or multimodal benchmark data.
-- `docs/grafana-dashboard.json`: Minimal Prometheus metrics dashboard template for fleet and session monitoring.
-- Tests: `tests/unit/session-recovery.test.ts` (8/8 passed), `tests/integration/session-resume-recovery.test.ts` (2/2 passed).
-
-Verified: `npm test` passes 222/222 tests (1 skipped on macOS); `npm run test:py` passes 4/4; `node --test dist/tests/integration/package-distribution.test.js` passes 3/3; `npm --prefix website run test` builds all 8 pages; `npm pack --dry-run` produces 144 files (210.5 kB); `git diff --check` passes with zero issues.
+Verified: `npm test` passes 229 tests (228 pass, 1 skip); `npm run test:py` passes 4/4; `package-distribution.test.js` passes 3/3; `npm --prefix website run test` passes 8/8 static pages; `git diff --check` clean; pushed commit `82b9497`.
 
 
 ---

@@ -73,6 +73,16 @@
 - **Status**: Implementation and local regression verification complete; real Docker/Podman rootless isolation remains unverified when runtime/image prerequisites are unavailable.
 
 ## Step 14: Session Recovery, Master-Plan Audit & Release Readiness
-
 - **Scope**: Ledger-as-WAL plus versioned checksummed checkpoints with backup and ledger reconstruction; fast resume via cached classifications; daemon-startup flagging of dead-owner sessions; Mann-Whitney U; Grafana template.
-- **Status**: Implemented and locally verified (222 pass, 1 skip). Open items: real Linux/Windows CI evidence, multi-machine mTLS, fsync durability, process-kill crash tests, optional OTLP, docs/community files. See `docs/handoff.md` "Remaining Work".
+- **Status**: Implemented and verified.
+
+## Release Verification & Hardening Milestone Plan
+- **Scope**: Fresh-clone isolated end-to-end bisection verification (`tests/integration/fresh-clone-e2e.test.ts`), P1.1-P1.6 resolution, durable checkpoint writes (`fsyncSync` of temp file and POSIX directory metadata in `src/session/checkpoint.ts`), subprocess-kill (SIGKILL) crash tests, unsupported schema and wrong-repo rejection, recovery CLI documentation (`needs_recovery`), and multi-machine mTLS runbook (`docs/multimachine-mtls-setup.md`).
+- **Files Modified / Created**:
+  - `src/session/checkpoint.ts` (fsyncSync durability)
+  - `src/cli/index.ts` (recovery help text)
+  - `tests/integration/session-resume-recovery.test.ts` (SIGKILL crash tests, schemaVersion 99, wrong-repo)
+  - `tests/integration/fresh-clone-e2e.test.ts` (fresh-clone bisection, report consistency, XSS escaping, timeout safety)
+  - `docs/multimachine-mtls-setup.md` (multi-machine mTLS deployment & partition test runbook)
+  - `README.md`, `docs/architecture.md`, `docs/safety-model.md`, `docs/handoff.md`, `tasks/todo.md`, `AI_BRAIN.md`, `SESSION_MEMORY.md`
+- **Status**: Implementation, local suites (229 tests, 228 pass, 1 skip), packaging (dry-run & external consumer project install), and website verification completed. Platform CI blockers identified and documented.
