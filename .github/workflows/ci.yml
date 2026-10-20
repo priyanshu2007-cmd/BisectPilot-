@@ -58,7 +58,23 @@ jobs:
         run: npm run typecheck
 
       - name: Run full TypeScript test suite
-        run: npm test
+        shell: bash
+        run: |
+          node scripts/run-tests.mjs 2>&1 | tee test-run.log || {
+            echo "### Test Failures on ${{ matrix.os }} (Node ${{ matrix.node-version }})" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 120 test-run.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log-${{ matrix.os }}-node-${{ matrix.node-version }}
+          path: test-run.log
+          if-no-files-found: ignore
 
       - name: Run Python CLI and tests (POSIX)
         if: runner.os != 'Windows'
