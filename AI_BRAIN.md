@@ -69,10 +69,9 @@ Do NOT store entire source files in this memory.
 - Step 13 distributed bisection fleet & multi-worker coordination: `JobType` extensions, capability matching, lease fencing tokens (`fencingToken`), parallel noisy-oracle sampling (`FleetCoordinator.scheduleNoisyOracleBatch`), parallel benchmark sampling, and fleet observability metrics.
 - Step 14 automated session recovery: versioned checksummed checkpoints (`checkpoint.json` / `checkpoint.backup.json`), tri-level fallback recovery (`primary` -> `backup` -> `reconstructed_from_wal`), fast resume via cached classifications, daemon startup dead-process recovery (`needs_recovery`), Mann-Whitney U rank-sum statistics (`mannWhitneyUTest`), and Grafana dashboard template.
 - Release Verification & Hardening Milestone: fresh-clone end-to-end bisection proof (`tests/integration/fresh-clone-e2e.test.ts`), `fsyncSync` checkpoint durability on POSIX, subprocess SIGKILL crash tests, unsupported schema (`schemaVersion: 99`) and wrong-repo rejection tests, multi-machine mTLS runbook (`docs/multimachine-mtls-setup.md`), and recovery CLI help documentation.
+- GitHub CI/CD & Master-Only Integration Milestone: branch consolidation onto `master`, remediation of trailing-space `skills ` tree entry with full backup, cross-platform GitHub Actions matrix (`ubuntu-latest`, `macos-latest`, `windows-latest` on Node 20 & 22), package validation job with consumer installation, and gated GitHub Packages publication workflow (`.github/workflows/publish.yml`) scoped to `@priyanshu2007-cmd/bisectpilot`.
 
 ### In Progress / Blocked
-- Remediation of Git tree entry with trailing space (`skills `) causing Windows NTFS checkout failures.
-- Provisioning rootless subuid/subgid mapping on Linux CI runner for real rootless Podman test execution.
 - Physical multi-machine deployment across separate hosts (loopback mTLS verified 10/10).
 
 ### Planned (Post-Release P2)

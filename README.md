@@ -1,5 +1,7 @@
 # BisectPilot
 
+[![CI](https://github.com/priyanshu2007-cmd/BisectPilot-/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/priyanshu2007-cmd/BisectPilot-/actions/workflows/ci.yml)
+
 Local-first, evidence-first Git regression bisection engine and interactive trace replay workspace.
 
 ## Architecture Overview
@@ -145,7 +147,23 @@ BisectPilot generates rich, portable evidence artifacts for both local developer
 
 ## Distribution & Packaging
 
-BisectPilot is packaged as a lightweight, zero-runtime-dependency npm module with a dedicated CLI executable and complete TypeScript declarations:
+BisectPilot is packaged as a lightweight, zero-runtime-dependency npm module (`@priyanshu2007-cmd/bisectpilot`) with a dedicated CLI executable and complete TypeScript declarations.
+
+### Installation via GitHub Packages
+
+Configure `.npmrc`:
+```ini
+@priyanshu2007-cmd:registry=https://npm.pkg.github.com
+```
+
+Install:
+```bash
+npm install @priyanshu2007-cmd/bisectpilot
+# Or execute directly via npx
+npx @priyanshu2007-cmd/bisectpilot --help
+```
+
+### Local Packaging Verification
 
 ```bash
 # Verify package contents

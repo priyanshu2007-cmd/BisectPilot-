@@ -1,0 +1,105 @@
+name: Publish to GitHub Packages
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (validate without publishing)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  validate-and-publish:
+    name: Validate and Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@priyanshu2007-cmd"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript and run test suite
+        run: |
+          npm run build
+          npm run typecheck
+          npm test
+          npm run test:py
+          node --test dist/tests/integration/package-distribution.test.js
+
+      - name: Verify package version and registry status
+        id: check-version
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "Package name: $PKG_NAME"
+          echo "Package version: $PKG_VERSION"
+          echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
+          echo "pkg_version=$PKG_VERSION" >> $GITHUB_OUTPUT
+
+          # Verify package name matches GitHub Packages scope requirement
+          if [[ "$PKG_NAME" != "@priyanshu2007-cmd/"* ]]; then
+            echo "Error: Package name $PKG_NAME must be scoped to @priyanshu2007-cmd for GitHub Packages."
+            exit 1
+          fi
+
+          # Check if version already exists on GitHub Packages
+          EXISTS=$(npm view "$PKG_NAME@$PKG_VERSION" version --registry=https://npm.pkg.github.com 2>/dev/null || echo "not_found")
+          if [ "$EXISTS" = "$PKG_VERSION" ]; then
+            echo "Error: Version $PKG_VERSION of $PKG_NAME is already published to GitHub Packages."
+            exit 1
+          fi
+          echo "Version $PKG_VERSION is available for publication."
+
+      - name: Validate package tarball and consumer installation
+        run: |
+          TARBALL=$(npm pack)
+          echo "Generated tarball: $TARBALL"
+          tar -ztvf "$TARBALL"
+          if tar -ztvf "$TARBALL" | grep -E '(\.env|tests/|session|\.key|\.crt)'; then
+            echo "Error: Sensitive or test files found in tarball!"
+            exit 1
+          fi
+          CONSUMER_DIR=$(mktemp -d)
+          cd "$CONSUMER_DIR"
+          npm init -y
+          npm install "$(dirname "$CONSUMER_DIR")/$TARBALL" || npm install "$GITHUB_WORKSPACE/$TARBALL"
+          npx bisectpilot --help
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "Dry run requested. Executing npm publish --dry-run..."
+            npm publish --dry-run
+          else
+            echo "Publishing ${{ steps.check-version.outputs.pkg_name }}@${{ steps.check-version.outputs.pkg_version }} to https://npm.pkg.github.com..."
+            npm publish
+            echo "Published successfully to https://npm.pkg.github.com"
+            echo "View package at: https://github.com/users/priyanshu2007-cmd/packages?repo_name=BisectPilot-"
+          fi

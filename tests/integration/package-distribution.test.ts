@@ -100,7 +100,10 @@ test("Feature B — Production-Ready npm Package Distribution", async (t) => {
       stdio: "pipe",
     });
 
-    assert.ok(existsSync(path.join(consumerDir, "node_modules", "bisectpilot")));
+    const rootPkg = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf-8"));
+    const pkgName = rootPkg.name as string;
+    const installedPath = path.join(consumerDir, "node_modules", ...pkgName.split("/"));
+    assert.ok(existsSync(installedPath), `Installed package must exist at ${installedPath}`);
 
     // 1. Verify executable CLI binary resolves and runs --help
     const helpOutput = execSync("npx bisectpilot --help", {
@@ -126,8 +129,8 @@ test("Feature B — Production-Ready npm Package Distribution", async (t) => {
     writeFileSync(
       testScript,
       `
-import { LocalBisectEngine, minimizeInput } from "bisectpilot";
-import { GIT_BISECT_EXIT_CODES } from "bisectpilot/contracts";
+import { LocalBisectEngine, minimizeInput } from "${pkgName}";
+import { GIT_BISECT_EXIT_CODES } from "${pkgName}/contracts";
 
 if (typeof LocalBisectEngine !== "function") throw new Error("LocalBisectEngine not exported");
 if (typeof minimizeInput !== "function") throw new Error("minimizeInput not exported");

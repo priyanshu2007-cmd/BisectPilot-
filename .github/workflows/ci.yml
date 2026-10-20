@@ -2,9 +2,15 @@ name: CI
 
 on:
   push:
-    branches: ["main", "agent-a/engine", "agent-b/*"]
+    branches: ["master"]
   pull_request:
-    branches: ["**"]
+    branches: ["master"]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -22,31 +28,49 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check git diff formatting and whitespace
+        run: git diff --check
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: "npm"
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Run test suite
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run full TypeScript test suite
         run: npm test
 
-      - name: Verify npm packaging dry run
-        run: npm pack --dry-run
-
-      - name: Run Python CLI tests
-        if: runner.os != 'Windows'
+      - name: Run Python CLI and tests
         run: npm run test:py
+
+      - name: Run package distribution integration test
+        run: node --test dist/tests/integration/package-distribution.test.js
 
       - name: Verify Rootless Container Runtime and Run Real Container Sandbox Test
         if: runner.os == 'Linux'
         run: |
           if command -v podman >/dev/null 2>&1; then
-            echo "Inspecting Podman rootless status..."
-            ROOTLESS=$(podman info --format json | jq -r '.host.security.rootless // false')
+            echo "Inspecting Podman rootless configuration..."
+            if ! grep -q "^runner:" /etc/subuid 2>/dev/null; then
+              echo "runner:100000:65536" | sudo tee -a /etc/subuid || true
+              echo "runner:100000:65536" | sudo tee -a /etc/subgid || true
+            fi
+            podman system migrate 2>/dev/null || true
+            ROOTLESS=$(podman info --format json 2>/dev/null | jq -r '.host.security.rootless // false' 2>/dev/null || echo "false")
             echo "Podman rootless state: $ROOTLESS"
             if [ "$ROOTLESS" = "true" ]; then
               echo "Pulling minimal alpine image..."
@@ -55,15 +79,76 @@ jobs:
               echo "Using digest-pinned image: $IMAGE_DIGEST"
               BISECTPILOT_SANDBOX_RUNTIME=podman BISECTPILOT_SANDBOX_IMAGE="$IMAGE_DIGEST" node --test dist/tests/integration/sandbox-runtime.test.js
             else
-              echo "Podman is not running in rootless mode on this runner."
+              echo "Podman is not running in rootless mode on this runner (subuid/subgid mapping unverified)."
             fi
           else
             echo "Podman is not installed on this runner."
           fi
 
       - name: Test website build & tests
-        if: runner.os != 'Windows'
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
         run: |
           npm --prefix website ci
           npm --prefix website run test
           npm --prefix website run build
+
+  package-validation:
+    name: Package Validation & Consumer Verification
+    needs: [test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Pack distributable tarball
+        id: pack
+        run: |
+          TARBALL=$(npm pack)
+          echo "tarball=$TARBALL" >> $GITHUB_OUTPUT
+          echo "Created package tarball: $TARBALL"
+
+      - name: Verify package contents and entry points
+        run: |
+          TARBALL="${{ steps.pack.outputs.tarball }}"
+          echo "Tarball contents:"
+          tar -ztvf "$TARBALL"
+          # Verify that sensitive or test files are not present in tarball
+          if tar -ztvf "$TARBALL" | grep -E '(\.env|tests/|session|\.key|\.crt)'; then
+            echo "Error: Unintended sensitive or test files found in tarball!"
+            exit 1
+          fi
+          echo "Package contents verified clean."
+
+      - name: Install in isolated consumer project and run CLI
+        run: |
+          TARBALL="${{ steps.pack.outputs.tarball }}"
+          TARBALL_PATH="$(pwd)/$TARBALL"
+          CONSUMER_DIR=$(mktemp -d)
+          cd "$CONSUMER_DIR"
+          npm init -y
+          npm install "$TARBALL_PATH"
+          npx bisectpilot --help
+          npx bisectpilot --version
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bisectpilot-package-${{ github.sha }}
+          path: ${{ steps.pack.outputs.tarball }}
+          retention-days: 7
