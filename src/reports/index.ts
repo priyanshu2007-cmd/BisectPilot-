@@ -169,13 +169,103 @@ export function generateJsonReport(
   };
 }
 
+export interface CollapsedEvaluation {
+  readonly commitSha: string;
+  readonly runCount: number;
+  readonly unanimous: boolean;
+  readonly classificationSummary: string;
+  readonly primaryClassification: string;
+  readonly reasonCode: string;
+  readonly detail: string;
+  readonly classifiedBy?: "automated" | "human";
+  readonly noisySampling?: SessionJsonReportV1["evaluations"][number]["noisySampling"];
+  readonly benchmark?: SessionJsonReportV1["evaluations"][number]["benchmark"];
+  readonly runs: readonly SessionJsonReportV1["evaluations"][number][];
+}
+
+export function collapseConsecutiveEvaluations(
+  evaluations: readonly SessionJsonReportV1["evaluations"][number][]
+): CollapsedEvaluation[] {
+  const groups: SessionJsonReportV1["evaluations"][number][][] = [];
+  for (const ev of evaluations) {
+    const currentGroup = groups[groups.length - 1];
+    if (currentGroup && currentGroup[0]!.commitSha === ev.commitSha) {
+      currentGroup.push(ev);
+    } else {
+      groups.push([ev]);
+    }
+  }
+
+  return groups.map((group) => {
+    const first = group[0]!;
+    if (group.length === 1) {
+      return {
+        commitSha: first.commitSha,
+        runCount: 1,
+        unanimous: true,
+        classificationSummary: first.classification,
+        primaryClassification: first.classification,
+        reasonCode: first.reasonCode,
+        detail: first.detail,
+        classifiedBy: first.classifiedBy,
+        noisySampling: first.noisySampling,
+        benchmark: first.benchmark,
+        runs: group,
+      };
+    }
+
+    const total = group.length;
+    const counts = new Map<string, number>();
+    for (const ev of group) {
+      counts.set(ev.classification, (counts.get(ev.classification) ?? 0) + 1);
+    }
+
+    const uniqueClasses = [...counts.keys()];
+    const unanimous = uniqueClasses.length === 1;
+
+    let classificationSummary: string;
+    let primaryClassification: string;
+    if (unanimous) {
+      const cls = uniqueClasses[0]!;
+      classificationSummary = `${cls} · ${total}/${total} runs`;
+      primaryClassification = cls;
+    } else {
+      const parts = [...counts.entries()].map(([cls, count]) => `${count}/${total} ${cls}`);
+      classificationSummary = parts.join(", ");
+      primaryClassification = "mixed";
+    }
+
+    const uniqueReasons = [...new Set(group.map((g) => g.reasonCode))];
+    const uniqueDetails = [...new Set(group.map((g) => g.detail).filter(Boolean))];
+
+    const hasHuman = group.some((g) => g.classifiedBy === "human");
+    const lastWithNoisy = [...group].reverse().find((g) => g.noisySampling);
+    const lastWithBench = [...group].reverse().find((g) => g.benchmark);
+
+    return {
+      commitSha: first.commitSha,
+      runCount: total,
+      unanimous,
+      classificationSummary,
+      primaryClassification,
+      reasonCode: uniqueReasons.join(", "),
+      detail: uniqueDetails.join("; ") || "-",
+      classifiedBy: hasHuman ? "human" : undefined,
+      noisySampling: lastWithNoisy?.noisySampling,
+      benchmark: lastWithBench?.benchmark,
+      runs: group,
+    };
+  });
+}
+
 export function generateMarkdownReport(
   manifest: SessionManifestV1,
   events: readonly LedgerEvent[]
 ): string {
   const jsonReport = generateJsonReport(manifest, events);
   const badLabel = manifest.config.terms?.new ? `First ${manifest.config.terms.new}` : "First Bad";
-  const classifiedRows = jsonReport.evaluations.map(
+  const collapsed = collapseConsecutiveEvaluations(jsonReport.evaluations);
+  const classifiedRows = collapsed.map(
     (e) => {
       const noisyNote = e.noisySampling
         ? ` *(noisy: P(bad)=${e.noisySampling.posterior.toFixed(2)}, ${e.noisySampling.failedRuns}F/${e.noisySampling.passedRuns}P)*`
@@ -183,7 +273,7 @@ export function generateMarkdownReport(
       const benchNote = e.benchmark
         ? ` *(mean: ${e.benchmark.mean.toFixed(1)}${e.benchmark.unit ? " " + e.benchmark.unit : ""}${e.benchmark.relativeDelta !== undefined ? `, ${e.benchmark.relativeDelta >= 0 ? "+" : ""}${(e.benchmark.relativeDelta * 100).toFixed(1)}%` : ""})*`
         : "";
-      return `| \`${e.commitSha.slice(0, 8)}\` | **${e.classification}**${e.classifiedBy === "human" ? " *(manual)*" : ""}${noisyNote}${benchNote} | \`${e.reasonCode}\` | ${e.detail} |`;
+      return `| \`${e.commitSha.slice(0, 8)}\` | **${e.classificationSummary}**${e.classifiedBy === "human" ? " *(manual)*" : ""}${noisyNote}${benchNote} | \`${e.reasonCode}\` | ${e.detail} |`;
     }
   );
 

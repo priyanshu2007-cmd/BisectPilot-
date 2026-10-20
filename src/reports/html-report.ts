@@ -1,6 +1,6 @@
 import type { LedgerEvent, SessionManifestV1 } from "../contracts/index.js";
 import { verifyLedgerChain } from "../ledger/index.js";
-import { generateJsonReport, redactSensitiveText } from "./index.js";
+import { collapseConsecutiveEvaluations, generateJsonReport, redactSensitiveText } from "./index.js";
 
 export function escapeHtml(str: string): string {
   return str
@@ -68,11 +68,12 @@ export function generateHtmlReport(
       ? "badge-bad"
       : "badge-good";
 
+  const collapsed = collapseConsecutiveEvaluations(jsonReport.evaluations);
   // Pre-rendered evaluations table rows
-  const evaluationRows = jsonReport.evaluations.map((ev, index) => {
-    const cls = ev.classification.toLowerCase();
+  const evaluationRows = collapsed.map((ev, index) => {
+    const cls = ev.primaryClassification.toLowerCase();
     const badgeCls =
-      cls === "good" ? "badge-good" : cls === "bad" ? "badge-bad" : "badge-skip";
+      cls === "good" ? "badge-good" : cls === "bad" ? "badge-bad" : cls === "skip" ? "badge-skip" : "badge-inconclusive";
     const manualBadge =
       ev.classifiedBy === "human"
         ? '<span class="badge badge-manual">manual</span>'
@@ -85,7 +86,7 @@ export function generateHtmlReport(
 
     const shortSha = escapeHtml(ev.commitSha.slice(0, 8));
     const fullSha = escapeHtml(ev.commitSha);
-    const classification = escapeHtml(ev.classification);
+    const classification = escapeHtml(ev.classificationSummary);
     const reasonCode = escapeHtml(ev.reasonCode);
     const detail = escapeHtml(ev.detail || "-");
 
@@ -497,16 +498,16 @@ export function generateHtmlReport(
     <!-- Timeline & Evaluated Revisions -->
     <div class="card">
       <div class="card-title">
-        <span>Evaluated Revisions Timeline (${jsonReport.evaluations.length})</span>
+        <span>Evaluated Revisions Timeline (${collapsed.length})</span>
       </div>
 
       <div class="filter-toolbar">
         <div class="filter-chips">
-          <button class="chip active" data-filter="all">All (${jsonReport.evaluations.length})</button>
-          <button class="chip" data-filter="bad">Bad (${jsonReport.evaluations.filter((e) => e.classification.toLowerCase() === "bad").length})</button>
-          <button class="chip" data-filter="good">Good (${jsonReport.evaluations.filter((e) => e.classification.toLowerCase() === "good").length})</button>
-          <button class="chip" data-filter="skip">Skip (${jsonReport.evaluations.filter((e) => e.classification.toLowerCase() === "skip").length})</button>
-          <button class="chip" data-filter="manual">Manual (${jsonReport.evaluations.filter((e) => e.classifiedBy === "human").length})</button>
+          <button class="chip active" data-filter="all">All (${collapsed.length})</button>
+          <button class="chip" data-filter="bad">Bad (${collapsed.filter((e) => e.primaryClassification.toLowerCase() === "bad").length})</button>
+          <button class="chip" data-filter="good">Good (${collapsed.filter((e) => e.primaryClassification.toLowerCase() === "good").length})</button>
+          <button class="chip" data-filter="skip">Skip (${collapsed.filter((e) => e.primaryClassification.toLowerCase() === "skip").length})</button>
+          <button class="chip" data-filter="manual">Manual (${collapsed.filter((e) => e.classifiedBy === "human").length})</button>
         </div>
         <input type="text" id="eval-search" class="search-input" placeholder="Search by SHA, status, reason...">
       </div>

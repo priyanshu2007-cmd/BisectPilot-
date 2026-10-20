@@ -1,7 +1,7 @@
 import { appendFileSync } from "node:fs";
 import type { LedgerEvent, SessionManifestV1 } from "../contracts/index.js";
 import { verifyLedgerChain } from "../ledger/index.js";
-import { generateJsonReport, redactSensitiveText } from "./index.js";
+import { collapseConsecutiveEvaluations, generateJsonReport, redactSensitiveText } from "./index.js";
 
 /**
  * Generate a GitHub Actions Step Summary in GitHub-Flavored Markdown.
@@ -90,7 +90,8 @@ export function generateGitHubStepSummary(
       "|---|---|---|---|"
     );
 
-    for (const ev of jsonReport.evaluations) {
+    const collapsed = collapseConsecutiveEvaluations(jsonReport.evaluations);
+    for (const ev of collapsed) {
       const shortSha = ev.commitSha.slice(0, 8);
       const manualTag = ev.classifiedBy === "human" ? " *(manual)*" : "";
       const noisyTag = ev.noisySampling
@@ -98,7 +99,7 @@ export function generateGitHubStepSummary(
         : "";
       const cleanDetail = redactSensitiveText(ev.detail || "-").replace(/\|/g, "\\|");
       lines.push(
-        `| \`${shortSha}\` | **${ev.classification}**${manualTag}${noisyTag} | \`${ev.reasonCode}\` | ${cleanDetail} |`
+        `| \`${shortSha}\` | **${ev.classificationSummary}**${manualTag}${noisyTag} | \`${ev.reasonCode}\` | ${cleanDetail} |`
       );
     }
 
@@ -172,11 +173,12 @@ export function generateGitHubIssueMarkdown(
     "|---|---|---|---|"
   ];
 
-  for (const ev of jsonReport.evaluations) {
+  const collapsed = collapseConsecutiveEvaluations(jsonReport.evaluations);
+  for (const ev of collapsed) {
     const shortSha = ev.commitSha.slice(0, 8);
     const manualTag = ev.classifiedBy === "human" ? " *(manual)*" : "";
     const cleanDetail = redactSensitiveText(ev.detail || "-").replace(/\|/g, "\\|");
-    lines.push(`| \`${shortSha}\` | **${ev.classification}**${manualTag} | \`${ev.reasonCode}\` | ${cleanDetail} |`);
+    lines.push(`| \`${shortSha}\` | **${ev.classificationSummary}**${manualTag} | \`${ev.reasonCode}\` | ${cleanDetail} |`);
   }
 
   lines.push(
