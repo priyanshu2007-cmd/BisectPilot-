@@ -161,31 +161,42 @@ Release Verification Milestone & Cross-Platform Hardening:
 5. Recovery documentation: updated CLI `HELP_TEXT`, `README.md`, `docs/architecture.md`, `docs/safety-model.md` with `needs_recovery` lifecycle and blocked-recovery conditions.
 6. Multi-machine mTLS runbook: created `docs/multimachine-mtls-setup.md` detailing dedicated PKI generation, daemon and remote worker deployment, fencing tokens, and network partition tests.
 7. Verification results: `npm test` passes 229 tests (228 pass, 1 skip on macOS); `npm run test:py` passes 4/4; `package-distribution.test.js` passes 3/3; `npm --prefix website run test` builds 8/8 static pages; `npm pack --dry-run` produces 144 files (211.8 kB); `git diff --check` clean.
-8. Release decision: `NOT_READY_BLOCKERS_REMAIN` (blocked by Git tree entry with trailing space `skills ` failing Windows checkout; Linux rootless Podman CI requiring user namespace setup; physical multi-machine deployment pending separate hardware).
+8. GitHub Actions CI/CD & Security Hardening:
+   - Fixed cross-platform test discovery in `scripts/run-tests.mjs` and added discovery regression test `tests/unit/test-discovery.test.ts`.
+   - Fixed Windows test failures: double quotes for `git commit -m`, `pathToFileURL` for ESM imports, `fs.realpathSync.native()` for 8.3 short paths, `TerminateProcess` exit code assertions.
+   - Enhanced Podman rootless sandbox inspect parser in `src/adapters/process/sandbox-runtime.ts` for expanded `CapDrop`, string `Entrypoint: ""`, and un-delegated cgroup v2 limits.
+   - Extended `parseFirstBadShaFromBisectOutput` in `src/application/index.ts` for quoted git terms and direct 0-intermediate candidate detection.
+   - Added `--version` and `-v` CLI handlers in `src/cli/index.ts`.
+   - Created `.github/workflows/ci.yml` with full matrix (`ubuntu-latest`, `macos-latest`, `windows-latest` across Node `20.x` & `22.x`), package validation, isolated consumer test, and SPDX SBOM generation.
+   - Added `.github/workflows/codeql.yml` for JS/TS and Python static application security analysis.
+   - Added `.github/workflows/secret-scanning.yml` and `.gitleaks.toml` for Gitleaks secret scanning.
+   - Configured `.github/dependabot.yml` for npm, website, GitHub Actions, and pip.
+   - Enforced master-only branch policy with full offline bundle backup.
 
 Relevant files:
-- `src/session/checkpoint.ts`
+- `.github/workflows/ci.yml`
+- `.github/workflows/codeql.yml`
+- `.github/workflows/secret-scanning.yml`
+- `.github/dependabot.yml`
+- `.gitleaks.toml`
+- `scripts/run-tests.mjs`
+- `tests/unit/test-discovery.test.ts`
 - `src/cli/index.ts`
-- `docs/multimachine-mtls-setup.md`
-- `tests/integration/fresh-clone-e2e.test.ts`
-- `tests/integration/session-resume-recovery.test.ts`
-- `docs/architecture.md`
-- `docs/safety-model.md`
-- `docs/handoff.md`
+- `src/application/index.ts`
+- `src/adapters/process/sandbox-runtime.ts`
 
 Do not open unrelated files.
 
 ## 14. Last Session Summary
 
-Release Verification Milestone implementation added:
-- `src/session/checkpoint.ts`: Implemented `fsyncSync` on temporary checkpoint files before rename and POSIX directory descriptor `fsyncSync` to guarantee inode/directory entry durability across system crashes.
-- `src/cli/index.ts`: Extended CLI `HELP_TEXT` with documentation for `needs_recovery`, `bisectpilot status`, `bisectpilot resume`, and the 5 blocked-recovery failure modes.
-- `tests/integration/session-resume-recovery.test.ts`: Added SIGKILL crash tests during active bisection, unsupported `schemaVersion: 99` rejection tests, and wrong-repository checkpoint rejection tests.
-- `tests/integration/fresh-clone-e2e.test.ts`: Added fresh-clone isolated bisection suite verifying planted regression `c3`, good and bad bounds, JSON/MD/HTML report consistency, HTML XSS escaping, timeout safety, and skip budget enforcement.
-- `docs/multimachine-mtls-setup.md`: Authored complete multi-machine mTLS deployment and network partition simulation runbook.
-- Updated `README.md`, `docs/architecture.md`, `docs/safety-model.md`, `docs/handoff.md`, `tasks/plan.md`, `tasks/todo.md`.
-
-Verified: `npm test` passes 229 tests (228 pass, 1 skip); `npm run test:py` passes 4/4; `package-distribution.test.js` passes 3/3; `npm --prefix website run test` passes 8/8 static pages; `git diff --check` clean; pushed commit `82b9497`.
+CI/CD and Security Hardening milestone completed:
+- Diagnosed and fixed cross-platform test discovery without shell globs.
+- Resolved all platform-specific test bugs across Linux, macOS, and native Windows.
+- GitHub Actions CI matrix (6/6 jobs) + Package Validation (7/7 jobs) passed 100% green on `master` (Run ID: `39463385230`).
+- GitHub CodeQL static analysis passed for JS/TS & Python with 0 alerts (Run ID: `39463385096`).
+- GitHub Gitleaks secret scanning passed with 0 leaks found (Run ID: `39463385058`).
+- Verified npm package build, isolated consumer installation, CLI execution, and SPDX SBOM generation.
+- Master branch synchronized cleanly with remote; no secondary branches exist.
 
 
 ---
