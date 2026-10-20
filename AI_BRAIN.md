@@ -170,14 +170,13 @@ Release Verification Milestone & Cross-Platform Hardening:
    - Created `.github/workflows/ci.yml` with full matrix (`ubuntu-latest`, `macos-latest`, `windows-latest` across Node `20.x` & `22.x`), package validation, isolated consumer test, and SPDX SBOM generation.
    - Added `.github/workflows/codeql.yml` for JS/TS and Python static application security analysis.
    - Added `.github/workflows/secret-scanning.yml` and `.gitleaks.toml` for Gitleaks secret scanning.
-   - Configured `.github/dependabot.yml` for npm, website, GitHub Actions, and pip.
-   - Enforced master-only branch policy with full offline bundle backup.
+   - Disabled automated Dependabot update PRs by removing `.github/dependabot.yml` and confirming `dependabot_security_updates` is disabled; closed PRs #5-#8 and deleted remote branches.
+   - Enforced strict master-only branch policy with full offline bundle backup.
 
 Relevant files:
 - `.github/workflows/ci.yml`
 - `.github/workflows/codeql.yml`
 - `.github/workflows/secret-scanning.yml`
-- `.github/dependabot.yml`
 - `.gitleaks.toml`
 - `scripts/run-tests.mjs`
 - `tests/unit/test-discovery.test.ts`
