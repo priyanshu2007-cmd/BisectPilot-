@@ -93,17 +93,21 @@
   - `npm --prefix website run test`: 8/8 static pages generated cleanly.
   - `git diff --check`: 0 formatting or whitespace errors.
 
-## Outstanding Release Blockers & Remediation
+## Outstanding Verification Gaps & Remediation
 
-1. **Native Windows CI Checkout Failure:**
-   - **Blocker:** Git tree contains an entry with a trailing space (`skills `), which fails NTFS checkout on Windows (`Invalid argument`).
-   - **Remediation:** Remove the `skills ` entry from the Git tree on a POSIX machine (`git rm -r --cached "skills "`) and re-trigger native Windows CI.
-2. **Linux Rootless Podman CI Setup:**
-   - **Blocker:** Standard GitHub Actions Ubuntu runner lacks rootless user namespace setup (`host.security.rootless == true`).
-   - **Remediation:** Configure runner environment with subuid/subgid mapping before running `sandbox-runtime.test.js`.
-3. **Physical Multi-Machine Hardware:**
-   - **Blocker:** Requires two distinct networked hosts to execute `docs/multimachine-mtls-setup.md`.
-   - **Remediation:** Run automated verification script across two networked cloud instances.
+1. **Native Windows checkout:** The current tracked-path audit found zero paths
+   ending in spaces, and the recorded Windows CI matrix run completed. Keep the
+   path audit in release verification because a future generated or restored
+   tree entry could reintroduce the NTFS failure.
+2. **Real rootless container execution:** The macOS development host has no
+   usable rootless Docker/Podman runtime, so the real sandbox integration test
+   remains skipped locally. The CI workflow attempts the Podman test when the
+   runner exposes a rootless runtime; if it does not, the step currently reports
+   the limitation rather than failing the whole matrix.
+3. **Physical multi-machine mTLS:** This still requires two distinct networked
+   hosts. Run the automated protocol and partition checks from
+   `docs/multimachine-mtls-setup.md` across two authorized machines before
+   claiming production multi-host coverage.
 
 ## P2 — Deferred Post-Release Items
 - P2.1: Optional OpenTelemetry Collector OTLP exporter bridge.
