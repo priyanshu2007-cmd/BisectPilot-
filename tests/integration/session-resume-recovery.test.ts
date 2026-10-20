@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, it } from "node:test";
 import {
   DEFAULT_EXECUTION_POLICY,
@@ -445,9 +446,10 @@ process.exit(0);
       // Child runner script that invokes LocalBisectEngine.start
       const runnerScript = path.join(tmpRoot, "run_child.mjs");
       const sessionId = "sess_sigkill_01";
+      const engineUrl = pathToFileURL(path.resolve("dist/src/index.js")).href;
       writeFileSync(
         runnerScript,
-        `import { LocalBisectEngine, DEFAULT_EXECUTION_POLICY } from ${JSON.stringify(path.resolve("dist/src/index.js"))};
+        `import { LocalBisectEngine, DEFAULT_EXECUTION_POLICY } from ${JSON.stringify(engineUrl)};
 
 const engine = new LocalBisectEngine();
 await engine.start({
@@ -473,10 +475,10 @@ await engine.start({
         encoding: "utf-8",
       });
 
-      // Confirm child was killed by signal
+      // Confirm child was killed by signal or terminated on Windows
       assert.ok(
-        childRes.signal === "SIGKILL" || existsSync(killSignalFile),
-        `Expected SIGKILL termination, got exitCode=${childRes.status}, signal=${childRes.signal}`
+        childRes.signal === "SIGKILL" || existsSync(killSignalFile) || (process.platform === "win32" && childRes.status !== 0),
+        `Expected SIGKILL termination, got exitCode=${childRes.status}, signal=${childRes.signal}, stderr=${childRes.stderr}`
       );
 
       const sessionDir = path.join(sessionRootDir, sessionId);

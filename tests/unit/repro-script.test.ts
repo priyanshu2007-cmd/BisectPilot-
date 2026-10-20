@@ -102,12 +102,12 @@ test("Feature C — repro.sh standalone execution in real Git fixture", async ()
 
     // Commit 1: good
     writeFileSync(path.join(tmpDir, "check.js"), "process.exit(0);\n", "utf-8");
-    execSync("git add check.js && git commit -m 'c1: good'", { cwd: tmpDir, stdio: "ignore" });
+    execSync('git add check.js && git commit -m "c1: good"', { cwd: tmpDir, stdio: "ignore" });
     const c1Sha = execSync("git rev-parse HEAD", { cwd: tmpDir }).toString().trim().toLowerCase();
 
     // Commit 2: bad
     writeFileSync(path.join(tmpDir, "check.js"), "process.exit(1);\n", "utf-8");
-    execSync("git add check.js && git commit -m 'c2: bad'", { cwd: tmpDir, stdio: "ignore" });
+    execSync('git add check.js && git commit -m "c2: bad"', { cwd: tmpDir, stdio: "ignore" });
     const c2Sha = execSync("git rev-parse HEAD", { cwd: tmpDir }).toString().trim().toLowerCase();
 
     const config: BisectConfigV1 = {

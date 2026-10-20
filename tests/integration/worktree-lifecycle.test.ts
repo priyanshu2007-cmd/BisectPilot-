@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -26,7 +26,7 @@ async function createTempRepo(): Promise<{
   readonly repoDir: string;
   readonly commits: readonly string[];
 }> {
-  const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "bp-a1-a2-"));
+  const tmpRoot = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "bp-a1-a2-")));
   const repoDir = path.join(tmpRoot, "repo");
   mkdirSyncSafe(repoDir);
   await runGit(["init", "-b", "main"], repoDir);
@@ -50,7 +50,7 @@ function mkdirSyncSafe(p: string): void {
 
 describe("A1 & A2 — Real Git Adapter & Guarded Worktree Lifecycle", () => {
   it("resolves refs, ancestry, commit counts, and doctor checks on a real temp repo", async () => {
-    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "bp-a1-"));
+    const tmpRoot = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "bp-a1-")));
     const repoDir = path.join(tmpRoot, "repo");
     const fs = await import("node:fs");
     fs.mkdirSync(repoDir, { recursive: true });
@@ -68,7 +68,7 @@ describe("A1 & A2 — Real Git Adapter & Guarded Worktree Lifecycle", () => {
       }
 
       const root = await resolveRepoRoot(repoDir);
-      assert.equal(fs.realpathSync(root), fs.realpathSync(repoDir));
+      assert.equal(fs.realpathSync.native(root), fs.realpathSync.native(repoDir));
       assert.equal(await isAncestor(repoDir, shas[0]!, shas[2]!), true);
       assert.equal(await isAncestor(repoDir, shas[2]!, shas[0]!), false);
       assert.equal(await countCommitsBetween(repoDir, shas[0]!, shas[2]!), 2);
@@ -82,7 +82,7 @@ describe("A1 & A2 — Real Git Adapter & Guarded Worktree Lifecycle", () => {
   });
 
   it("preserves original HEAD, staged index, tracked edits, and untracked files across worktree create/reset/remove and refuses unowned paths", async () => {
-    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "bp-a2-"));
+    const tmpRoot = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "bp-a2-")));
     const repoDir = path.join(tmpRoot, "repo");
     const sessionDir = path.join(tmpRoot, "session-01");
     const worktreeDir = path.join(sessionDir, "worktree");

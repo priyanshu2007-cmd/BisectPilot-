@@ -141,17 +141,17 @@ test("Feature A — Custom Bisect Terms: Real Git repository bisection", async (
 
     // Commit 1: good / fast
     writeFileSync(path.join(tmpDir, "bench.txt"), "time=10", "utf-8");
-    execSync("git add bench.txt && git commit -m 'c1: fast'", { cwd: tmpDir, stdio: "ignore" });
+    execSync('git add bench.txt && git commit -m "c1: fast"', { cwd: tmpDir, stdio: "ignore" });
     const c1Sha = execSync("git rev-parse HEAD", { cwd: tmpDir }).toString().trim().toLowerCase();
 
     // Commit 2: bad / slow (the regression)
     writeFileSync(path.join(tmpDir, "bench.txt"), "time=100", "utf-8");
-    execSync("git add bench.txt && git commit -m 'c2: introduced slow delay'", { cwd: tmpDir, stdio: "ignore" });
+    execSync('git add bench.txt && git commit -m "c2: introduced slow delay"', { cwd: tmpDir, stdio: "ignore" });
     const c2Sha = execSync("git rev-parse HEAD", { cwd: tmpDir }).toString().trim().toLowerCase();
 
     // Commit 3: still slow
     writeFileSync(path.join(tmpDir, "bench.txt"), "time=105", "utf-8");
-    execSync("git add bench.txt && git commit -m 'c3: still slow'", { cwd: tmpDir, stdio: "ignore" });
+    execSync('git add bench.txt && git commit -m "c3: still slow"', { cwd: tmpDir, stdio: "ignore" });
     const c3Sha = execSync("git rev-parse HEAD", { cwd: tmpDir }).toString().trim().toLowerCase();
 
     // Oracle: fail (exit 1) if time > 50, pass (exit 0) if time <= 50

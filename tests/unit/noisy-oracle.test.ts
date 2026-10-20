@@ -271,11 +271,11 @@ test("Feature B — Endpoint Preflight Under Noisy-Oracle Mode", async () => {
     execSync("git config user.name test", { cwd: tmpDir, stdio: "ignore" });
 
     writeFileSync(path.join(tmpDir, "f.txt"), "0", "utf-8");
-    execSync("git add f.txt && git commit -m 'c1: good'", { cwd: tmpDir, stdio: "ignore" });
+    execSync('git add f.txt && git commit -m "c1: good"', { cwd: tmpDir, stdio: "ignore" });
     const c1Sha = execSync("git rev-parse HEAD", { cwd: tmpDir }).toString().trim().toLowerCase();
 
     writeFileSync(path.join(tmpDir, "f.txt"), "1", "utf-8");
-    execSync("git add f.txt && git commit -m 'c2: bad'", { cwd: tmpDir, stdio: "ignore" });
+    execSync('git add f.txt && git commit -m "c2: bad"', { cwd: tmpDir, stdio: "ignore" });
     const c2Sha = execSync("git rev-parse HEAD", { cwd: tmpDir }).toString().trim().toLowerCase();
 
     // In a flaky test where good fails occasionally or bad passes occasionally:

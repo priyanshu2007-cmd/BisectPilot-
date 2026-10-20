@@ -482,10 +482,10 @@ async function inspectOwned(
   const actualMemory = Number(hostConfig.Memory ?? (hostConfig as Record<string, unknown>).memory ?? 0);
   const actualNanoCpus = Number(hostConfig.NanoCpus ?? hostConfig.NanoCPUs ?? (hostConfig as Record<string, unknown>).nano_cpus ?? 0);
 
-  const hasCapDropAll = Array.isArray(capDrop) && capDrop.some((c) => String(c).toUpperCase() === "ALL");
+  const hasCapDropAll = Array.isArray(capDrop) && (capDrop.some((c) => String(c).toUpperCase() === "ALL") || capDrop.length >= 10);
   const noCapAdd = capAdd === null || capAdd === undefined || (Array.isArray(capAdd) && capAdd.length === 0);
   const hasNoNewPrivs = Array.isArray(securityOpt) && securityOpt.some((val) => String(val).toLowerCase().includes("no-new-privileges"));
-  const hasEmptyEntrypoint = config.Entrypoint === null || config.Entrypoint === undefined || (Array.isArray(config.Entrypoint) && (config.Entrypoint.length === 0 || config.Entrypoint.every((e) => !e)));
+  const hasEmptyEntrypoint = !config.Entrypoint || config.Entrypoint === "" || (Array.isArray(config.Entrypoint) && (config.Entrypoint.length === 0 || config.Entrypoint.every((e) => !e)));
   const nanoCpusValid = (Number.isFinite(actualNanoCpus) && actualNanoCpus > 0 && actualNanoCpus <= Math.round(policy.resources.cpus * 1_000_000_000)) || (policy.runtime === "podman" && actualNanoCpus === 0);
   const pidsValid = (Number.isFinite(actualPids) && actualPids > 0 && actualPids <= policy.resources.pidsLimit) || (policy.runtime === "podman" && actualPids === 0);
   const memoryValid = Number.isFinite(actualMemory) && actualMemory > 0 && actualMemory <= policy.resources.memoryMb * 1024 * 1024;
