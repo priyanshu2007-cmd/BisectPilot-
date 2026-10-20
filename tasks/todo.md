@@ -1,6 +1,7 @@
 # Task Checklist: BisectPilot Development Milestones
 
 ## Initial Setup & Explorer Integration
+
 - [x] Update `.vscode/settings.json` for ultra-clean Explorer mode & ponytail-review slimming
 - [x] Install `@juliusbrussee/caveman-code` globally (`npm install -g @juliusbrussee/caveman-code`)
 - [x] Apply `/learn` session learnings to `AI_RULES.md` and `.agents/skills/coding-and-debugging/SKILL.md`
@@ -11,12 +12,14 @@
 - [x] Task 4: Add `isValidScenario()`, `/runs/index.json` loader, and `.json` file import in `website/components/PilotConsole.tsx`
 
 ## Step 1: Engine Foundation & Microlithic Architecture
+
 - [x] Implement Phase G0 contracts in `src/contracts/`
 - [x] Implement Git client and guarded worktree manager (`src/adapters/git/`)
 - [x] Implement process runner, classifier, and hash-chained ledger (`src/adapters/process/`, `src/domain/`)
 - [x] Implement end-to-end BisectEngine integration (`src/application/`)
 
 ## Step 2: Automatic Good-Endpoint Discovery & CLI Report Replay
+
 - [x] Add `--good auto` merge-base and exponential backoff scan in `src/adapters/git/git-client.ts`
 - [x] Add CLI `--good auto` flag support in `src/cli/index.ts`
 - [x] Implement `src/reports/replay-adapter.ts` (`adaptCliReportToReplayScenario()`)
@@ -24,12 +27,14 @@
 - [x] Add unit tests for auto-good discovery and report replay adapter
 
 ## Step 3: Human-in-the-Loop Oracle & Toolchain Wrapper
+
 - [x] Add `--prompt` interactive terminal oracle in `src/oracle/index.ts`
 - [x] Support `good`, `bad`, and `skip` responses with input sanitization and timeout
 - [x] Implement `--toolchain` runtime wrapper in `src/oracle/index.ts`
 - [x] Add unit tests in `tests/unit/prompt-oracle.test.ts` and `tests/unit/toolchain-wrapper.test.ts`
 
 ## Step 4: Custom Bisect Terms, Noisy-Oracle Reliability & Release Hardening
+
 - [x] Implement `--terms <term_old>:<term_new>` in `src/contracts/config.ts`, `src/domain/classification.ts`, `src/application/index.ts`, `src/cli/index.ts`
 - [x] Implement Bayesian sequential probability ratio test (SPRT) in `src/domain/bayesian.ts` with `--noisy` flag
 - [x] Implement standalone `repro.sh` / `repro.ps1` reproduction bundle generator in `src/reports/index.ts`
@@ -41,6 +46,7 @@
 - [x] Update all `.md` documentation files and push branch to origin
 
 ## Step 5: Delta Debugging, Input Minimization & npm Distribution
+
 - [x] Implement Delta Debugging (`ddmin`) for line and character reduction in `src/domain/minimizer.ts`
 - [x] Add baseline reproduction check to abort safely if input does not reproduce failure
 - [x] Add workspace isolation and path traversal guards preventing accidental overwrites
@@ -56,6 +62,7 @@
 - [x] Verify `git diff --check` passes with zero formatting issues
 
 ## Step 6: Standalone Offline HTML Reports & GitHub Actions Integration
+
 - [x] Implement self-contained offline interactive HTML report in `src/reports/html-report.ts`
 - [x] Ensure zero external network/CDN/font dependencies and full XSS mitigation (`escapeHtml`, safe JSON embedding)
 - [x] Include interactive search, status filtering, noisy sampling metrics, candidate boundary verification, and hash-chain audit viewer
@@ -68,6 +75,7 @@
 - [x] Update README, documentation, and verify `git diff --check` clean
 
 ## Step 7: Monorepo & Multi-Package Workspace Bisection
+
 - [x] Implement safe workspace path validation (`validateWorkspacePath`) preventing path escapes and symlink jailbreaks in `src/domain/workspace.ts`
 - [x] Implement path scope calculation (`resolveWorkspacePathScope`) including workspace directory and root manifest/lockfile files
 - [x] Implement monorepo lockfile and dependency manifest detection & SHA-256 hashing (`detectWorkspaceDependencies`)
@@ -77,7 +85,9 @@
 - [x] Safely skip historical commits prior to workspace directory creation with reason `untestable_revision`
 - [x] Record workspace dependency hashes and metadata into hash-chained ledger and session reports
 - [x] Update standalone reproduction script (`repro.sh`) to `cd` into the package workspace within temporary worktree
+
 ## Step 8: Performance Regression & Benchmark Bisection
+
 - [x] Implement pure statistical computation in `src/domain/statistics.ts` (`calculateSampleStats`, `calculatePercentile`, `logGamma`, `regularizedIncompleteBeta`, `calculateStudentsTPValue`, `welchTTest`)
 - [x] Implement benchmark extraction & regression detection in `src/domain/benchmark.ts` (`parseBenchmarkMetric`, `buildBenchmarkStats`, `evaluateBenchmarkRegression`)
 - [x] Support flat and nested JSON, key-value text, and regex patterns with strict unit checking and NaN/Infinity rejection
@@ -94,6 +104,7 @@
 - [x] Verify full test suites: 158/158 TypeScript tests passing, 4/4 Python tests passing, clean package distribution (102 files, 114.2 kB), clean `git diff --check`
 
 ## Step 9: Daemon, Durable Jobs & Distributed Workers
+
 - [x] Freeze typed job, worker capability, protocol and transition contracts without changing existing bisect contracts unnecessarily
 - [x] Implement atomic durable queue with validated transitions, stable attempts, idempotent results and conservative lease recovery
 - [x] Implement daemon lifecycle, authenticated bounded HTTP protocol, status, shutdown, enqueue, cancellation and explicit recovery
@@ -103,6 +114,7 @@
 - [x] Run targeted tests, full TypeScript/Python suites, package dry-run and `git diff --check`; report remote-machine limits honestly
 
 ## Step 10: Rootless Container Sandbox & Untrusted Commit Execution
+
 - [x] Freeze the opt-in sandbox policy contract and strict validation without changing default direct execution
 - [x] Implement injected Docker/Podman runtime discovery, rootless/image/isolation preflight and owned container lifecycle
 - [x] Integrate sandbox execution at the process/oracle boundary with safe mounts, no-network policy, resource limits, cancellation and bounded output
@@ -111,6 +123,7 @@
 - [x] Update CLI/docs/ledger evidence and run targeted/full regression, package and diff checks
 
 ## Step 11: Mutual TLS, Remote Workers & Production Security
+
 - [x] Implement mutual TLS (mTLS) for daemon and pull workers (`node:tls`, `node:https`) with bidirectional certificate verification
 - [x] Enforce mandatory mTLS and reject plain HTTP for remote/non-loopback daemon binds and worker connections
 - [x] Verify client certificate Subject CN and SHA-256 fingerprint; bind authenticated remote requests to verified worker identity
@@ -121,6 +134,7 @@
 - [x] Verify full regression suites (186/186 TS tests passing, 4/4 Python tests passing, package distribution clean, `git diff --check` clean)
 
 ## Step 12: Production Observability, OpenTelemetry & Prometheus Metrics
+
 - [x] Define OpenTelemetry-compatible tracing interface (`TraceContext`, W3C `traceparent`, `Tracer`, `Span`, `SpanExporter`, `InMemorySpanExporter`) in `src/telemetry/tracing.ts`
 - [x] Implement Prometheus text exposition metrics registry (`Counter`, `Gauge`, `Histogram`, `MetricsRegistry`, `defaultMetrics`) in `src/telemetry/metrics.ts`
 - [x] Implement tamper-evident audit event exporter (`AuditEventExporter`, `FileAuditEventExporter`, `WebhookAuditEventExporter`, `InMemoryAuditEventExporter`) in `src/telemetry/audit-exporter.ts`
@@ -135,6 +149,7 @@
 - [x] Update documentation (`AI_BRAIN.md`, `SESSION_MEMORY.md`, `README.md`, `docs/architecture.md`, `docs/safety-model.md`, `docs/handoff.md`)
 
 ## Step 13: Distributed Bisection Fleet & Multi-Worker Coordination
+
 - [x] Feature A: Worker capability matching & bounded scheduling (`JobType`, `fencingToken`, `requiredCapabilities`, `supportedProfiles`, `features`, `environmentIdentity`, `maxConcurrentJobs`)
 - [x] Feature B: Lease fencing & authoritative result acceptance (monotonically incrementing `fencingToken`, strict attempt matching, rejection of stale/expired/cross-worker results, duplicate idempotency)
 - [x] Feature C: Parallel noisy-oracle sampling (`FleetCoordinator.scheduleNoisyOracleBatch`, bounded sample jobs, Bayesian SPRT early stopping, cancellation of unneeded samples)
@@ -146,6 +161,7 @@
 - [x] Verify full regression suites (`npm test` 213 tests passing, `npm run test:py` 4/4 passing, package distribution clean, `git diff --check` clean)
 
 ## Step 14: Automated Session Recovery, Master-Plan Audit & Release Readiness
+
 - [x] Feature A: Durable session checkpointing & write-ahead log (WAL) synchronization (`src/session/checkpoint.ts`, `checkpoint.json`, `checkpoint.backup.json`, atomic rename, checksum calculation)
 - [x] Feature B: Deterministic tri-level fallback recovery (`primary` -> `backup` -> `reconstructed_from_wal` via hash-chained `events.jsonl`)
 - [x] Feature C: Fast resume semantics (cached authoritative classifications in checkpoint are reused instantly by `executeSingleBisectStep`, skipping live test re-execution)
@@ -157,6 +173,7 @@
 - [x] Feature I: Complete test and release artifact verification (`npm test` 229 tests across 29 suites with 228 passing and 1 skipped on macOS, `npm run test:py` 4/4 passing, package dry-run and isolated installation 3/3 passing, `website` 8/8 static pages passing, `git diff --check` clean)
 
 ## Release Verification Milestone — P1 Blockers & Cross-Platform Hardening
+
 - [x] Fresh-clone end-to-end bisection functional proof (`tests/integration/fresh-clone-e2e.test.ts` — planted regression c3 found, JSON/MD/HTML report consistency, HTML XSS escaping, timeout safety, skip budget enforcement)
 - [x] P1.3: Checkpoint durability guarantees (`fsyncSync` temporary file & directory synchronization on POSIX in `src/session/checkpoint.ts`)
 - [x] P1.4: Process-kill (SIGKILL) crash tests at persistence write points (`tests/integration/session-resume-recovery.test.ts`)
@@ -166,6 +183,7 @@
 - [x] P1.1: Genuine Linux, macOS & Windows CI execution (Passed on GitHub Actions run 39463385230 across ubuntu-latest, macos-latest, windows-latest on Node 20.x & 22.x; rootless Podman verified on Linux runner; native Windows execution verified)
 
 ## Step 15: GitHub CI/CD, Master Branch Discipline & Security Hardening
+
 - [x] Fix cross-platform test discovery in `scripts/run-tests.mjs` and add regression suite `tests/unit/test-discovery.test.ts`
 - [x] Fix Windows runner test compatibility (cmd.exe quoting, Node ESM pathToFileURL, 8.3 path canonicalization, exit code assertions)
 - [x] Enhance Podman rootless sandbox inspect parsing in `src/adapters/process/sandbox-runtime.ts` for expanded CapDrop, string Entrypoint, and un-delegated cgroup limits
@@ -180,8 +198,8 @@
 - [x] Enforce master-only branch policy with full offline backup bundle preserved
 
 ## P2 — Deferred Post-Release Items
+
 - [ ] P2.1: Optional OpenTelemetry Collector OTLP exporter (W3C traceparent and Prometheus /metrics exist)
 - [ ] P2.2: Website workspace / package-scope indicator in Explorer specimen
 - [ ] P2.3: Deeper native Windows process-tree (`taskkill.exe`) and daemon recovery tests
 - [ ] P2.4: Open-source community files (CHANGELOG, CONTRIBUTING, issue templates, npm provenance preparation)
-

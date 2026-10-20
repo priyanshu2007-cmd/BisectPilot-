@@ -36,6 +36,196 @@ npm run typecheck
 npm test
 ```
 
+## How to Use the Project
+
+BisectPilot has three related surfaces. Choose the one that matches the job you
+are doing:
+
+| Surface | Use it for | Start here |
+| --- | --- | --- |
+| TypeScript engine and CLI | Finding the first Git revision that changes a test or benchmark result | `npm run build`, then `node dist/src/index.js --help` |
+| Python trace-diff utility | Comparing JSONL AI traces and exporting a replayable web scenario | `npm run test:py`, then `python -m bisectpilot --help` with `PYTHONPATH=src` |
+| Next.js website | Exploring deterministic sample runs or importing a CLI JSON report | `npm --prefix website run dev`, then <http://localhost:3000> |
+
+### 1. Prepare the repository
+
+Use the pinned Node version when possible, then install the root dependencies:
+
+```bash
+nvm install
+nvm use
+npm ci
+npm run build
+```
+
+The project does not require a database, cloud account, API key, or external
+service for local regression bisection. The optional `.env.example` contains
+only deterministic local defaults. Never put credentials in a config file,
+session directory, report, or Git commit.
+
+### 2. Run the CLI against a Git repository
+
+Start with diagnostics and a starter configuration. `init` writes a JSON file;
+edit the command and Git references for the repository you want to investigate.
+The starter uses `HEAD~5` as the good reference and `HEAD` as the bad reference,
+with `npm test` as the in-tree oracle.
+
+```bash
+node dist/src/index.js doctor .
+node dist/src/index.js init --out bisectpilot.config.json
+# Edit bisectpilot.config.json, then inspect the plan:
+node dist/src/index.js plan --config bisectpilot.config.json
+```
+
+For a normal run, explicitly consent to executing historical repository code:
+
+```bash
+node dist/src/index.js start \
+  --config bisectpilot.config.json \
+  --yes
+```
+
+The engine runs in a tool-owned detached worktree, not in the primary checkout.
+After the run, use the session ID printed by the CLI:
+
+```bash
+node dist/src/index.js status <sessionId>
+node dist/src/index.js report <sessionId> --json --out report.json --verify
+node dist/src/index.js report <sessionId> --html --out report.html
+node dist/src/index.js report <sessionId> --github-summary summary.md
+node dist/src/index.js cleanup <sessionId> --dry-run
+node dist/src/index.js cleanup <sessionId>
+```
+
+`status` is the safe first command after an interruption. If it reports
+`needs_recovery`, inspect the checkpoint and then explicitly resume:
+
+```bash
+node dist/src/index.js status <sessionId>
+node dist/src/index.js resume <sessionId>
+```
+
+Resume is fail-closed when the lock is still held by a live process, the
+repository or worktree identity changed, ownership markers are missing, the
+ledger hash chain is broken, or the checkpoint schema is unsupported.
+
+### 3. Use the advanced CLI modes
+
+- **Automatic good endpoint:** use `--good auto` when the good boundary is not
+  known and the repository history contains a usable ancestor or tag.
+- **Monorepo scope:** use `--cwd packages/api` and optionally `--scope src
+  tests` to limit history safely while still including root manifests and
+  lockfiles.
+- **Noisy tests:** add `--noisy` when repeated executions can disagree. The
+  Bayesian sampler records its evidence and stops when the configured confidence
+  boundary is reached.
+- **Performance regressions:** use `--metric`, `--threshold`,
+  `--relative-regression`, `--direction`, and sampling flags. The engine records
+  warmups, sample statistics, Welch's t-test, and boundary checks.
+- **Input minimization:** use `minimize <inputPath> --test <command>` to reduce
+  a failure-inducing file with a bounded line/character budget.
+- **Sandboxing:** pass `--sandbox docker|podman` and a local lowercase
+  digest-pinned `--sandbox-image`. Sandboxing is opt-in; it never pulls an
+  image, enables networking, or falls back to unsandboxed execution.
+
+### 4. Use the daemon and worker workflow
+
+The daemon is a local authenticated queue. The worker polls outbound and must
+use a pre-provisioned repository mapping. Keep the default loopback HTTP mode
+for one-machine development; use the mTLS runbook for remote workers.
+
+```bash
+node dist/src/index.js daemon start --state-dir .bisectpilot/daemon
+node dist/src/index.js daemon status --state-dir .bisectpilot/daemon
+node dist/src/index.js daemon enqueue \
+  --config bisectpilot.config.json \
+  --yes \
+  --state-dir .bisectpilot/daemon
+node dist/src/index.js daemon recover <jobId> --state-dir .bisectpilot/daemon
+node dist/src/index.js daemon stop --state-dir .bisectpilot/daemon
+```
+
+For distributed execution, configure HTTPS, a trusted client CA, worker
+certificates, Subject CN identity matching, and fingerprint revocation. Follow
+[`docs/multimachine-mtls-setup.md`](docs/multimachine-mtls-setup.md) rather than
+inventing certificate or repository-sharing steps.
+
+## Testing and Verification
+
+Run checks in this order when changing the engine:
+
+```bash
+npm run typecheck
+npm test
+npm run test:py
+npm pack --dry-run
+git diff --check
+```
+
+Useful narrower commands are:
+
+```bash
+npm run test:unit
+npm run test:integration
+npm run test:safety
+node --test dist/tests/integration/fresh-clone-e2e.test.js
+node --test dist/tests/integration/session-resume-recovery.test.js
+```
+
+The website has its own lockfile and command set:
+
+```bash
+npm --prefix website ci
+npm --prefix website run typecheck
+npm --prefix website run lint
+npm --prefix website run build
+npm --prefix website run test
+```
+
+The website test is a composite check: TypeScript validation, ESLint, and a
+production Next.js build. A browser interaction smoke test is useful after UI
+changes, but it is separate from the static build check.
+
+## Security Checks
+
+These checks are safe to run locally and do not send source code to an external
+service:
+
+```bash
+npm audit --offline
+npm audit --omit=dev --offline
+gitleaks git --redact --no-banner --config .gitleaks.toml
+uv lock --check
+```
+
+If available in your environment, also run `pip-audit` and `osv-scanner`. The
+repository's CI workflows run CodeQL, Gitleaks, Dependabot configuration checks,
+package-content validation, and an SPDX SBOM generation step. Security review
+must preserve the project boundaries: historical repository code is untrusted,
+the default worktree is not an OS sandbox, and remote daemon binds require mTLS.
+
+## Debugging a Failed Run
+
+1. Reproduce the failure with the smallest command: `doctor`, `plan`, one
+   targeted test file, or one session report.
+2. Check `status <sessionId>` before touching a session directory. Record the
+   reported lifecycle state, checkpoint sequence, WAL sequence, and resumability.
+3. Inspect the generated JSON report with `--verify`; do not treat an HTML view
+   as the authoritative ledger.
+4. If a process died, use `resume` only after confirming no live process owns
+   the session lock. Use `cleanup --dry-run` before cleanup.
+5. For daemon work, compare `daemon status`, job state, lease ownership, worker
+   identity, and `/metrics` output. Never delete queue or session files to make a
+   test green.
+6. For sandbox failures, verify runtime availability, rootless mode, local image
+   digest, resource limits, and the explicit no-network policy. A skipped real
+   runtime test means isolation was not verified on that host.
+
+When reporting a bug, include the exact command, platform, Node/Python versions,
+session state, redacted report or error, and the smallest reproducible fixture.
+Do not include tokens, private keys, full environment dumps, or unredacted
+historical repository data.
+
 ## CLI Usage
 
 ```bash
