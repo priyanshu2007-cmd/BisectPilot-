@@ -95,7 +95,7 @@ export async function executeSingleBisectStep(sessionDir: string): Promise<0 | 1
         detail: outcome.detail,
         durationMs: undefined,
         noisySampling: outcome.noisySampling,
-        benchmark: outcome.benchmark as any,
+        benchmark: outcome.benchmark ? { ...outcome.benchmark } : undefined,
         classifiedAt: new Date().toISOString(),
       },
       events.length

@@ -186,7 +186,7 @@ export async function promptHumanClassification(params: {
     params.streams?.isTTY !== undefined
       ? params.streams.isTTY
       : params.streams?.input !== undefined
-        ? Boolean((input as any).isTTY ?? true)
+        ? Boolean((input as { isTTY?: boolean }).isTTY ?? true)
         : Boolean(process.stdin.isTTY);
 
   if (params.abortSignal?.aborted) {

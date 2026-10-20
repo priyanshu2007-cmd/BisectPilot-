@@ -163,6 +163,28 @@ function extractCertSubjectCn(certPath: string): string | undefined {
   }
 }
 
+export type SampleEvaluationResult = {
+  readonly outcome: "good" | "bad" | "skip" | "inconclusive";
+  readonly measurement?: number;
+  readonly durationMs?: number;
+};
+
+export interface SampleEvaluatorEngine {
+  evaluateSample(
+    job: JobRecord,
+    options?: { readonly signal?: AbortSignal }
+  ): Promise<SampleEvaluationResult>;
+}
+
+export function hasSampleEvaluator(engine: unknown): engine is SampleEvaluatorEngine {
+  return (
+    typeof engine === "object" &&
+    engine !== null &&
+    "evaluateSample" in engine &&
+    typeof (engine as { evaluateSample?: unknown }).evaluateSample === "function"
+  );
+}
+
 export class WorkerService {
   readonly stateDir: string;
   private readonly options: WorkerServiceOptions;
@@ -434,8 +456,8 @@ export class WorkerService {
             let sampleOutcome: { outcome: "good" | "bad" | "skip" | "inconclusive"; measurement?: number; durationMs?: number };
             if (this.options.sampleEvaluator) {
               sampleOutcome = await this.options.sampleEvaluator(job, { signal: controller.signal });
-            } else if (typeof (this.engine as any).evaluateSample === "function") {
-              sampleOutcome = await (this.engine as any).evaluateSample(job, { signal: controller.signal });
+            } else if (hasSampleEvaluator(this.engine)) {
+              sampleOutcome = await this.engine.evaluateSample(job, { signal: controller.signal });
             } else {
               sampleOutcome = { outcome: "good", durationMs: 0 };
             }

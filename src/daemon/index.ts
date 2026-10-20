@@ -375,7 +375,16 @@ function parseWorkerCapabilities(value: unknown):
       ...(Array.isArray(value.sandboxRuntimes) ? { sandboxRuntimes: value.sandboxRuntimes } : {}),
       ...(Array.isArray(value.supportedProfiles) ? { supportedProfiles: value.supportedProfiles as ("functional" | "performance")[] } : {}),
       ...(Array.isArray(value.features) ? { features: value.features as ("workspace" | "noisy" | "benchmark")[] } : {}),
-      ...(isRecord(value.environmentIdentity) ? { environmentIdentity: value.environmentIdentity as any } : {}),
+      ...(isRecord(value.environmentIdentity)
+        ? {
+            environmentIdentity: {
+              platform: String(value.environmentIdentity.platform),
+              architecture: String(value.environmentIdentity.architecture),
+              ...(typeof value.environmentIdentity.nodeVersion === "string" ? { nodeVersion: value.environmentIdentity.nodeVersion } : {}),
+              ...(typeof value.environmentIdentity.containerImageDigest === "string" ? { containerImageDigest: value.environmentIdentity.containerImageDigest } : {}),
+            },
+          }
+        : {}),
     },
   };
 }
