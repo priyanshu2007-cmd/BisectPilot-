@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -45,10 +45,7 @@ async function createTempRepo(): Promise<{
 }
 
 function mkdirSyncSafe(p: string): void {
-  writeFileSync(path.join(path.dirname(p), ".keep"), "", "utf-8");
-  rmSync(path.join(path.dirname(p), ".keep"), { force: true });
-  // create dir via node fs
-  import("node:fs").then((fs) => fs.mkdirSync(p, { recursive: true }));
+  mkdirSync(p, { recursive: true });
 }
 
 describe("A1 & A2 — Real Git Adapter & Guarded Worktree Lifecycle", () => {

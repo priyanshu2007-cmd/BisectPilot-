@@ -37,7 +37,7 @@
     "build": "tsc -p tsconfig.json",
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test \"dist/tests/unit/*.test.js\" \"dist/tests/integration/*.test.js\" \"dist/tests/safety/*.test.js\"",
+    "test": "tsc -p tsconfig.json && node scripts/run-tests.mjs",
     "test:unit": "tsc -p tsconfig.json && node --test \"dist/tests/unit/*.test.js\"",
     "test:integration": "tsc -p tsconfig.json && node --test \"dist/tests/integration/*.test.js\"",
     "test:safety": "tsc -p tsconfig.json && node --test \"dist/tests/safety/*.test.js\"",

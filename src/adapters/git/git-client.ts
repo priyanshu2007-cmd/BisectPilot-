@@ -17,8 +17,11 @@ export async function runGit(args: readonly string[], cwd?: string): Promise<Git
     const { stdout, stderr } = await execFileAsync("git", [...args], {
       cwd,
       env: {
-        PATH: process.env.PATH ?? "/usr/bin:/bin:/usr/local/bin",
-        HOME: process.env.HOME ?? "",
+        PATH: process.env.PATH ?? process.env.Path ?? "/usr/bin:/bin:/usr/local/bin",
+        HOME: process.env.HOME ?? process.env.USERPROFILE ?? "",
+        USERPROFILE: process.env.USERPROFILE ?? process.env.HOME ?? "",
+        SystemRoot: process.env.SystemRoot ?? process.env.windir ?? "",
+        windir: process.env.windir ?? process.env.SystemRoot ?? "",
         LANG: "C.UTF-8",
         LC_ALL: "C.UTF-8",
         GIT_TERMINAL_PROMPT: "0",

@@ -28,6 +28,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure Git identity for test suites
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git config --global init.defaultBranch main
+
       - name: Check git diff formatting and whitespace
         run: git diff --check
 
@@ -54,8 +60,15 @@ jobs:
       - name: Run full TypeScript test suite
         run: npm test
 
-      - name: Run Python CLI and tests
+      - name: Run Python CLI and tests (POSIX)
+        if: runner.os != 'Windows'
         run: npm run test:py
+
+      - name: Run Python CLI and tests (Windows)
+        if: runner.os == 'Windows'
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -v
 
       - name: Run package distribution integration test
         run: node --test dist/tests/integration/package-distribution.test.js

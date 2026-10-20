@@ -141,9 +141,11 @@ test("Feature C — repro.sh standalone execution in real Git fixture", async ()
     const reproPath = path.join(manifest.sessionDir, "repro.sh");
     assert.ok(existsSync(reproPath), "repro.sh should exist");
 
-    // Execute repro.sh directly
-    const reproOutput = execSync(`bash ${reproPath}`, { encoding: "utf-8" });
-    assert.match(reproOutput, /parent: good, candidate: bad/);
+    // Execute repro.sh directly on POSIX
+    if (process.platform !== "win32") {
+      const reproOutput = execSync(`bash ${reproPath}`, { encoding: "utf-8" });
+      assert.match(reproOutput, /parent: good, candidate: bad/);
+    }
 
     await engine.cleanup(manifest.id, { dryRun: false }, path.dirname(manifest.sessionDir));
   } finally {
