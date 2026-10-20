@@ -166,13 +166,21 @@ async function runEndpointKTimes(params: {
 
 function parseFirstBadShaFromBisectOutput(output: string, termNew = "bad"): string | undefined {
   const escapedTerm = termNew.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex1 = new RegExp(`\\b([0-9a-f]{40}) is the first (?:${escapedTerm}|bad) commit\\b`, "i");
+  const regex1 = new RegExp(`\\b([0-9a-f]{40}) is the first (?:['"]?(?:${escapedTerm}|bad)['"]?) commit\\b`, "i");
   const match1 = regex1.exec(output);
   if (match1) return match1[1]!.toLowerCase();
 
-  const regex2 = new RegExp(`# first (?:${escapedTerm}|bad) commit:\\s*\\[([0-9a-f]{40})\\]`, "i");
+  const regex2 = new RegExp(`# first (?:['"]?(?:${escapedTerm}|bad)['"]?) commit:\\s*\\[([0-9a-f]{40})\\]`, "i");
   const match2 = regex2.exec(output);
   if (match2) return match2[1]!.toLowerCase();
+
+  const regex3 = /\b([0-9a-f]{40}) is the first ['"]?[^'"\r\n]+['"]? commit\b/i;
+  const match3 = regex3.exec(output);
+  if (match3) return match3[1]!.toLowerCase();
+
+  const regex4 = /# first [^:\r\n]+ commit:\s*\[([0-9a-f]{40})\]/i;
+  const match4 = regex4.exec(output);
+  if (match4) return match4[1]!.toLowerCase();
 
   return undefined;
 }
