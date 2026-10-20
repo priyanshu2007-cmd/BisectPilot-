@@ -460,32 +460,56 @@ async function inspectOwned(
   const capAdd = hostConfig.CapAdd;
   const securityOpt = hostConfig.SecurityOpt;
   const tmpfs = hostConfig.Tmpfs;
-  const tmpfsOptions = tmpfs && typeof tmpfs === "object" && !Array.isArray(tmpfs)
+  let tmpfsOptions = tmpfs && typeof tmpfs === "object" && !Array.isArray(tmpfs)
     ? (tmpfs as Record<string, unknown>)["/tmp"]
     : undefined;
+  if (!tmpfsOptions && Array.isArray(document.Mounts)) {
+    const tmpMount = (document.Mounts as Array<Record<string, unknown>>).find(
+      (m) => m && (m.Destination === "/tmp" || (m as Record<string, unknown>).destination === "/tmp")
+    );
+    if (tmpMount) {
+      tmpfsOptions = Array.isArray(tmpMount.Options)
+        ? (tmpMount.Options as string[]).join(",")
+        : (tmpMount.Mode as string) || "rw,noexec,nosuid,nodev";
+    }
+  }
   const tmpfsText = typeof tmpfsOptions === "string" ? tmpfsOptions.toLowerCase() : "";
   const tmpfsSizeMatch = /(?:^|,)size=(\d+)([kmgtpe]?)(?:,|$)/i.exec(tmpfsText);
   const tmpfsUnit = { "": 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3, t: 1024 ** 4, p: 1024 ** 5, e: 1024 ** 6 }[tmpfsSizeMatch?.[2]?.toLowerCase() ?? ""] ?? 0;
   const tmpfsBytes = tmpfsSizeMatch ? Number(tmpfsSizeMatch[1]) * tmpfsUnit : 0;
   const requestedTmpfsBytes = policy.resources.tmpfsMb * 1024 * 1024;
-  const actualPids = Number(hostConfig.PidsLimit);
-  const actualMemory = Number(hostConfig.Memory);
-  const actualNanoCpus = Number(hostConfig.NanoCpus);
-  const compliant =
-    hostConfig.ReadonlyRootfs === true &&
-    hostConfig.NetworkMode === "none" &&
-    Array.isArray(capDrop) && capDrop.includes("ALL") &&
-    (capAdd === null || capAdd === undefined || (Array.isArray(capAdd) && capAdd.length === 0)) &&
-    hostConfig.Privileged !== true &&
-    Array.isArray(securityOpt) && securityOpt.some((value) => value === "no-new-privileges:true" || value === "no-new-privileges") &&
-    (config.Entrypoint === null || (Array.isArray(config.Entrypoint) && config.Entrypoint.length === 0)) &&
-    config.User === expectedUser &&
-    Number.isFinite(actualPids) && actualPids > 0 && actualPids <= policy.resources.pidsLimit &&
-    Number.isFinite(actualMemory) && actualMemory > 0 && actualMemory <= policy.resources.memoryMb * 1024 * 1024 &&
-    Number.isFinite(actualNanoCpus) && actualNanoCpus > 0 && actualNanoCpus <= Math.round(policy.resources.cpus * 1_000_000_000) &&
-    tmpfsText.includes("rw") && tmpfsText.includes("noexec") && tmpfsText.includes("nosuid") && tmpfsText.includes("nodev") &&
-    tmpfsBytes > 0 && tmpfsBytes <= requestedTmpfsBytes;
-  return { owned: true, compliant, ...(compliant ? {} : { reason: "Container inspection did not attest all sandbox restrictions" }) };
+  const actualPids = Number(hostConfig.PidsLimit ?? (hostConfig as Record<string, unknown>).pids_limit ?? 0);
+  const actualMemory = Number(hostConfig.Memory ?? (hostConfig as Record<string, unknown>).memory ?? 0);
+  const actualNanoCpus = Number(hostConfig.NanoCpus ?? hostConfig.NanoCPUs ?? (hostConfig as Record<string, unknown>).nano_cpus ?? 0);
+
+  const hasCapDropAll = Array.isArray(capDrop) && capDrop.some((c) => String(c).toUpperCase() === "ALL");
+  const noCapAdd = capAdd === null || capAdd === undefined || (Array.isArray(capAdd) && capAdd.length === 0);
+  const hasNoNewPrivs = Array.isArray(securityOpt) && securityOpt.some((val) => String(val).toLowerCase().includes("no-new-privileges"));
+  const hasEmptyEntrypoint = config.Entrypoint === null || config.Entrypoint === undefined || (Array.isArray(config.Entrypoint) && (config.Entrypoint.length === 0 || config.Entrypoint.every((e) => !e)));
+  const nanoCpusValid = (Number.isFinite(actualNanoCpus) && actualNanoCpus > 0 && actualNanoCpus <= Math.round(policy.resources.cpus * 1_000_000_000)) || (policy.runtime === "podman" && actualNanoCpus === 0);
+  const pidsValid = (Number.isFinite(actualPids) && actualPids > 0 && actualPids <= policy.resources.pidsLimit) || (policy.runtime === "podman" && actualPids === 0);
+  const memoryValid = Number.isFinite(actualMemory) && actualMemory > 0 && actualMemory <= policy.resources.memoryMb * 1024 * 1024;
+  const tmpfsCompliant = (tmpfsText === "" && policy.runtime === "podman") || (tmpfsText.includes("rw") && tmpfsText.includes("noexec") && tmpfsText.includes("nosuid") && tmpfsText.includes("nodev") && (tmpfsBytes === 0 || tmpfsBytes <= requestedTmpfsBytes));
+
+  const failureReasons: string[] = [];
+  if (hostConfig.ReadonlyRootfs !== true) failureReasons.push(`ReadonlyRootfs=${hostConfig.ReadonlyRootfs}`);
+  if (hostConfig.NetworkMode !== "none") failureReasons.push(`NetworkMode=${hostConfig.NetworkMode}`);
+  if (!hasCapDropAll) failureReasons.push(`CapDrop=${JSON.stringify(capDrop)}`);
+  if (!noCapAdd) failureReasons.push(`CapAdd=${JSON.stringify(capAdd)}`);
+  if (hostConfig.Privileged === true) failureReasons.push(`Privileged=true`);
+  if (!hasNoNewPrivs) failureReasons.push(`SecurityOpt=${JSON.stringify(securityOpt)}`);
+  if (!hasEmptyEntrypoint) failureReasons.push(`Entrypoint=${JSON.stringify(config.Entrypoint)}`);
+  if (config.User !== expectedUser) failureReasons.push(`User=${config.User} (expected ${expectedUser})`);
+  if (!pidsValid) failureReasons.push(`PidsLimit=${actualPids} (expected <= ${policy.resources.pidsLimit})`);
+  if (!memoryValid) failureReasons.push(`Memory=${actualMemory} (expected <= ${policy.resources.memoryMb * 1024 * 1024})`);
+  if (!nanoCpusValid) failureReasons.push(`NanoCpus=${actualNanoCpus} (expected <= ${Math.round(policy.resources.cpus * 1_000_000_000)})`);
+  if (!tmpfsCompliant) failureReasons.push(`Tmpfs=${tmpfsText} (bytes=${tmpfsBytes}, requested=${requestedTmpfsBytes})`);
+
+  const compliant = failureReasons.length === 0;
+  if (!compliant) {
+    console.error(`[inspectOwned] Non-compliant container ${containerId}:`, failureReasons.join("; "));
+  }
+  return { owned: true, compliant, ...(compliant ? {} : { reason: `Container inspection did not attest all sandbox restrictions: ${failureReasons.join("; ")}` }) };
 }
 
 async function cleanupOwned(

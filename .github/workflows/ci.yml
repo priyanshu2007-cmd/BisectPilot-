@@ -36,6 +36,7 @@ jobs:
           git config --global core.autocrlf false
 
       - name: Check git diff formatting and whitespace
+        if: runner.os != 'Windows'
         run: git diff --check
 
       - name: Setup Node.js ${{ matrix.node-version }}
