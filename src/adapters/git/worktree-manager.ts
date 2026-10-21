@@ -16,10 +16,19 @@ export interface WorktreeOwnershipMarker {
 
 function safeRealpath(targetPath: string): string {
   try {
-    return realpathSync(targetPath);
+    return (realpathSync.native ?? realpathSync)(targetPath);
   } catch {
     return path.resolve(targetPath);
   }
+}
+
+export function pathsEqual(a: string, b: string): boolean {
+  const normA = safeRealpath(a);
+  const normB = safeRealpath(b);
+  if (process.platform === "win32") {
+    return normA.toLowerCase() === normB.toLowerCase();
+  }
+  return normA === normB;
 }
 
 export async function createSessionWorktree(params: {
@@ -36,7 +45,7 @@ export async function createSessionWorktree(params: {
   ensureBisectPilotExcluded(resolvedCommon);
   const resolvedWorktree = path.resolve(params.worktreePath);
 
-  if (resolvedWorktree === resolvedRoot) {
+  if (pathsEqual(resolvedWorktree, resolvedRoot)) {
     throw new Error("Refusing to use original repository root as session worktree");
   }
   mkdirSync(path.dirname(resolvedWorktree), { recursive: true });
@@ -85,10 +94,10 @@ export async function verifyWorktreeOwnership(
   const resolvedManifestWorktree = safeRealpath(manifest.repository.worktreePath);
   const resolvedOriginalRoot = safeRealpath(manifest.repository.rootPath);
 
-  if (resolvedCandidate === resolvedOriginalRoot) {
+  if (pathsEqual(resolvedCandidate, resolvedOriginalRoot)) {
     throw new Error("Refusing destructive operation on original repository checkout");
   }
-  if (resolvedCandidate !== resolvedManifestWorktree) {
+  if (!pathsEqual(resolvedCandidate, resolvedManifestWorktree)) {
     throw new Error(
       `Worktree path mismatch: candidate ${resolvedCandidate} !== manifest ${resolvedManifestWorktree}`
     );
@@ -99,7 +108,7 @@ export async function verifyWorktreeOwnership(
 
   const actualCommonGitDir = safeRealpath(await resolveCommonGitDir(resolvedCandidate));
   const expectedCommonGitDir = safeRealpath(manifest.repository.commonGitDir);
-  if (actualCommonGitDir !== expectedCommonGitDir) {
+  if (!pathsEqual(actualCommonGitDir, expectedCommonGitDir)) {
     throw new Error(
       `Repository commonGitDir mismatch: ${actualCommonGitDir} !== ${expectedCommonGitDir}`
     );
@@ -118,7 +127,7 @@ export async function verifyWorktreeOwnership(
   if (
     parsedMarker.createdByTool !== true ||
     parsedMarker.sessionId !== manifest.id ||
-    safeRealpath(parsedMarker.worktreePath) !== resolvedCandidate
+    !pathsEqual(parsedMarker.worktreePath, resolvedCandidate)
   ) {
     throw new Error(`Ownership marker mismatch for session ${manifest.id}`);
   }
@@ -138,7 +147,11 @@ export async function resetOwnedWorktree(
   if (options?.overlayRelativePaths) {
     for (const rel of options.overlayRelativePaths) {
       const target = path.resolve(worktreePath, rel);
-      if (target.startsWith(worktreePath + path.sep)) {
+      const prefix = worktreePath + path.sep;
+      const isInside = process.platform === "win32"
+        ? target.toLowerCase().startsWith(prefix.toLowerCase())
+        : target.startsWith(prefix);
+      if (isInside) {
         rmSync(target, { force: true, recursive: true });
       }
     }

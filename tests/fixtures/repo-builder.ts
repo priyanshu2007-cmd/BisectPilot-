@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveRefToSha, runGit } from "../../src/git/index.js";
@@ -19,7 +19,8 @@ export async function buildFixtureRepo(
   steps: readonly CommitStepSpec[],
   prefix = "bp-fixture-"
 ): Promise<GeneratedFixtureRepo> {
-  const tmpRoot = mkdtempSync(path.join(os.tmpdir(), prefix));
+  const rawTmpRoot = mkdtempSync(path.join(os.tmpdir(), prefix));
+  const tmpRoot = (realpathSync.native ?? realpathSync)(rawTmpRoot);
   const repoDir = path.join(tmpRoot, "repo");
   mkdirSync(repoDir, { recursive: true });
 

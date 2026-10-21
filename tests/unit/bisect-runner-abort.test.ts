@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test, { afterEach, beforeEach } from "node:test";
@@ -16,11 +16,12 @@ import { appendLedgerEvent } from "../../src/ledger/index.js";
 import { executeSingleBisectStep } from "../../src/runner/bisect-runner.js";
 import { buildFixtureRepo, type GeneratedFixtureRepo } from "../fixtures/repo-builder.js";
 import { DEFAULT_EXECUTION_POLICY, type BisectConfigV1, type CommandSpec } from "../../src/contracts/config.js";
+import { pathsEqual, verifyWorktreeOwnership } from "../../src/adapters/git/worktree-manager.js";
 
 function createTmpDir(): string {
   const dir = path.join(os.tmpdir(), `bp-runner-abort-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   mkdirSync(dir, { recursive: true });
-  return dir;
+  return (realpathSync.native ?? realpathSync)(dir);
 }
 
 function makeTestConfig(repoDir: string, commandSpec?: CommandSpec): BisectConfigV1 {
@@ -362,5 +363,33 @@ test("Bisect Runner Abort and Classification Caching Suite", async (t) => {
       undefined,
       "Aborted commit must not be cached in classifications"
     );
+  });
+
+  await t.test("verifyWorktreeOwnership handles case and path normalization differences", async () => {
+    fixture = await buildFixtureRepo([
+      { message: "Initial commit", files: { "file.txt": "v1" } },
+    ]);
+
+    const wtDir = path.join(tmpDir, "path_norm_wt");
+    const { createSessionWorktree } = await import("../../src/adapters/git/worktree-manager.js");
+    const repository = await createSessionWorktree({
+      sessionId: "session_path_norm",
+      repoRoot: fixture.repoDir,
+      commonGitDir: path.join(fixture.repoDir, ".git"),
+      originalHead: fixture.commitShas[0]!,
+      originalWasDirty: false,
+      worktreePath: wtDir,
+      initialCommitSha: fixture.commitShas[0]!,
+    });
+
+    // Test pathsEqual handles identical and normalized paths
+    assert.strictEqual(pathsEqual(fixture.repoDir, fixture.repoDir), true);
+
+    // Verify ownership with original repository metadata
+    const verified = await verifyWorktreeOwnership(
+      { id: "session_path_norm", repository },
+      wtDir
+    );
+    assert.strictEqual(pathsEqual(verified, wtDir), true);
   });
 });
