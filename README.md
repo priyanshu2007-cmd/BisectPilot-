@@ -52,7 +52,7 @@ npx bisectpilot report --verify
 ## Why BisectPilot vs. Bare `git bisect run`
 
 | Capability | Bare `git bisect run` | BisectPilot |
-|---|---|---|
+| --- | --- | --- |
 | **Working Directory** | Mutates and dirties active checkout | Runs in isolated, detached session worktrees; preserves original HEAD and dirty files |
 | **Endpoint Sanity** | Blindly runs even if good fails or bad passes | Mandatory preflight validates both endpoints with multi-run flakiness checks |
 | **Boundary Confirmation** | Stops at first failing commit without re-check | Automatically re-verifies both candidate and parent commit boundaries (3/3 runs) |
@@ -97,7 +97,7 @@ npm link
 ## CLI Command Reference
 
 | Command | Description |
-|---|---|
+| --- | --- |
 | `bisectpilot doctor [path]` | Verify Git version, safe directories, repository health, and prerequisites |
 | `bisectpilot init [--out cfg]` | Generate a validated starter `bisectpilot.config.json` |
 | `bisectpilot plan [options]` | Validate revision bounds and estimate required bisection steps |
@@ -121,6 +121,7 @@ BisectPilot prioritizes safety when checking out historical revisions:
 2. **Worktree Isolation**: Operations run in `.bisectpilot/sessions/<id>/worktree`. Your primary working tree and uncommitted changes are never touched.
 3. **Automatic Exclusion**: `.bisectpilot/` is automatically and idempotently added to `.git/info/exclude`.
 4. **Rootless Sandbox (Optional)**: Run untrusted tests inside a rootless container:
+
    ```bash
    bisectpilot start --good v1.0 --bad HEAD --yes \
      --sandbox-runtime docker \

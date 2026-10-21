@@ -96,9 +96,9 @@ jobs:
           fi
 
       - name: Publish to npm Registry
-        if: ${{ github.event.inputs.registry == 'npm' && env.NPM_TOKEN != '' }}
+        if: ${{ github.event.inputs.registry == 'npm' && secrets['NPM_TOKEN'] != '' }}
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets['NPM_TOKEN'] }}
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             echo "Dry run requested for npm. Executing npm publish --dry-run..."

@@ -8,14 +8,14 @@
 
 ---
 
-# 0. What changed in v3 (read this first)
+## 0. What changed in v3 (read this first)
 
 v3 keeps every v2 decision that still holds and changes the plan in five ways.
 
-## 0.1 Problems fixed in the plan itself
+### 0.1 Problems fixed in the plan itself
 
 | # | Problem in v2 | Fix in v3 |
-|---|---|---|
+| --- | --- | --- |
 | 1 | Two product names ("Git Bisect Autopilot", "BisectPilot") and two CLI names | One name: **BisectPilot**, CLI `bisectpilot` |
 | 2 | Two different state machines (Section 3.8 and Section 20) | One state machine, Section 27, with allowed transitions |
 | 3 | "Inconclusive" appears in reports but not in the classification type | Classification stays 4 kinds (good/bad/skip/abort); "inconclusive" is a **session outcome** with explicit reason codes (Section 27.3) |
@@ -25,14 +25,14 @@ v3 keeps every v2 decision that still holds and changes the plan in five ways.
 | 7 | "Kill the process tree" was stated but not designed | Concrete POSIX and Windows design (Section 26.5) |
 | 8 | Work was one long sequential list | Split into **two parallel agents** with a frozen contract, file ownership and merge gates (Section 28) |
 
-## 0.2 New research that changes decisions
+### 0.2 New research that changes decisions
 
 - **Competitors are closer than v2 said.** FlareBisect (PyPI) already runs each candidate in its own git worktree, bisects on flake *rate*, and adds an AI root-cause note. git_bayesect does Bayesian bisection for flaky tests. So **"worktree isolation" and "AI explanation" are not differentiators.** BisectPilot's edge must be: the evidence ledger, endpoint + boundary verification, the oracle overlay, recovery, honest outcomes and reproducible reports. (Section 26.6)
 - **Google's Flake Aware Culprit Finding (ICST 2023)** shows plain bisection is unreliable with flaky tests and that a Bayesian noisy binary search does better. v3 adds a **flake-rate estimate at the endpoints** in P0 and a **noisy-oracle mode** in P1 instead of only "retry N times". (Section 26.4)
 - **Git internals verified:** bisect refs are per-worktree, so a BisectPilot session in its own worktree does not touch a bisect the user may be running in their main checkout. (Section 26.2)
 - **cargo-bisect-rustc** contributes three proven UX ideas: automatic search for a good endpoint, a manual "prompt me" mode, and a clear warning that non-monotonic histories may return *one* of several transitions. (Section 26.6)
 
-## 0.3 New features added
+### 0.3 New features added
 
 P0: oracle overlay, per-revision worktree reset, deterministic environment defaults, flake-rate check at endpoints, tamper-evident ledger, `repro.sh` generation, `safe.directory` / shallow / LFS / submodule checks in `doctor`.
 P1: automatic good-endpoint discovery, manual classification mode, noisy-oracle (Bayesian) mode, per-revision toolchain detection.
@@ -41,7 +41,7 @@ Details in Section 26. The two-agent plan is Section 28; copy-paste agent briefs
 
 ---
 
-## Executive recommendation
+### Executive recommendation
 
 Build **BisectPilot** as a local-first, evidence-first developer tool. It should help a developer answer a specific question:
 
@@ -61,7 +61,7 @@ The core product promise:
 
 ---
 
-# 1. The real-world problem
+## 1. The real-world problem
 
 A developer notices a regression in the current version of a project. The bug might have appeared anywhere among dozens or hundreds of commits. Reading every commit manually is slow, and a developer may not know which intermediate versions to test.
 
@@ -80,10 +80,10 @@ Native Git Bisect already searches history efficiently. The unsolved product pro
 
 BisectPilot should make the full investigation understandable and repeatable, not pretend that the search algorithm itself is new.
 
-## 1.1 Target users and what they need
+### 1.1 Target users and what they need
 
 | User | Real-world job | How the tool helps |
-|---|---|---|
+| --- | --- | --- |
 | Individual developer | Find the commit that broke a feature | Guided setup, safe worktree, automatic search and readable report |
 | Open-source maintainer | Turn a vague regression report into evidence | Reproducible command, logged revisions and a GitHub-ready report |
 | QA engineer | Identify when a repeatable test began failing | Test profile, endpoint verification and flaky-result handling |
@@ -92,7 +92,7 @@ BisectPilot should make the full investigation understandable and repeatable, no
 | Security engineer | Find when a security test or policy started failing | Later security-test profile with evidence, safe data handling and clear limits |
 | Team lead | Review what the investigation actually proved | Shareable report with evidence, environment details and skipped revisions |
 
-## 1.2 Design principle
+### 1.2 Design principle
 
 **Git chooses the revision; the test oracle classifies it; the evidence ledger records why.**
 
@@ -100,11 +100,11 @@ The test oracle is the deterministic check that answers the user's question. It 
 
 ---
 
-# 2. How to make it meaningfully better than a basic bisect wrapper
+## 2. How to make it meaningfully better than a basic bisect wrapper
 
 Several tools already automate Git Bisect locally or through hosted workflows. BisectPilot needs a useful difference. The strongest difference is a local-first investigation workflow with rigorous evidence, safer defaults, explicit classification policies and recoverable sessions.
 
-## Product differentiators
+### Product differentiators
 
 1. **Preflight before the expensive search.** Validate Git refs, the configured commands, and the fact that the good/bad endpoints actually behave as expected.
 2. **An explicit investigation profile.** Functional regression, broken build, performance regression and security-test regression each interpret results differently.
@@ -119,11 +119,11 @@ The product should not claim to prove the human-intended root cause. It identifi
 
 ---
 
-# 3. Feature list, prioritised by actual usefulness
+## 3. Feature list, prioritised by actual usefulness
 
-## P0 — Required for a trustworthy first release
+### P0 — Required for a trustworthy first release
 
-### 3.1 Guided investigation setup
+#### 3.1 Guided investigation setup
 
 Ask the user for:
 
@@ -141,13 +141,13 @@ Validate refs as commits, resolve them to full SHAs and store both the user's or
 
 **Real-world value:** prevents wasted runs caused by typos or incorrect assumptions.
 
-### 3.2 Endpoint verification
+#### 3.2 Endpoint verification
 
 Before starting the search, run the configured oracle at both endpoints in the isolated worktree or in a controlled preflight setup. The good endpoint should pass and the bad endpoint should fail for the expected reason. If the results contradict the user's labels, stop and explain why.
 
 Endpoint verification is not a mathematical guarantee that the test will behave consistently across all history, but it catches many misconfigured investigations early.
 
-### 3.3 Native Git Bisect engine
+#### 3.3 Native Git Bisect engine
 
 Delegate revision selection to Git. Do not build a custom binary search over commit lists for the MVP. Support native Bisect's good/bad labels and skip semantics through a runner that is outside the historical checkout.
 
@@ -160,7 +160,7 @@ Important runner contract:
 
 The runner should map internal classifications to those values explicitly. Do not forward an arbitrary test process exit code directly to Git, because a timeout, missing executable or internal error must not accidentally become evidence that the revision is bad.
 
-### 3.4 Isolated worktree
+#### 3.4 Isolated worktree
 
 Create a tool-owned detached worktree for the investigation. Save its path and creation metadata in the session directory. The initial release must never run `git checkout` or `git reset --hard` against the user's original checkout.
 
@@ -168,13 +168,13 @@ If the user's original checkout has uncommitted work, do not copy, stash, reset 
 
 A worktree reduces checkout interference; it does **not** sandbox untrusted code. Historical project scripts still run with the user's operating-system privileges unless execution is placed in a real sandbox.
 
-### 3.5 External runner and configuration
+#### 3.5 External runner and configuration
 
 Store the bisect runner, session settings and evidence outside the changing source tree. Historical commits may not contain the current config, may rename scripts, or may replace the path where an in-repo runner lives.
 
 Run a stable runner from the tool's own installation/session directory. Let the runner inspect the current `HEAD` of the investigation worktree and execute the configured test command there.
 
-### 3.6 Clear classification policy
+#### 3.6 Clear classification policy
 
 Use profile-specific interpretation:
 
@@ -185,7 +185,7 @@ Use profile-specific interpretation:
 
 When the program cannot distinguish a real regression from an environmental issue, record “inconclusive” internally and normally map it to Git's skip status. Make it visible in the report.
 
-### 3.7 Evidence ledger
+#### 3.7 Evidence ledger
 
 For each tested commit, record at minimum:
 
@@ -201,13 +201,13 @@ For each tested commit, record at minimum:
 
 Do not store full environment variables, tokens or unredacted secrets. Store the names of required variables rather than their values.
 
-### 3.8 Session states and safe recovery
+#### 3.8 Session states and safe recovery
 
 Use the single state machine defined in **Section 27** (v3 replaces the two different state lists that v2 had in this section and in Section 20).
 
 Ctrl+C should request graceful cancellation, stop the current process tree as far as practical, save evidence and preserve recovery metadata. `resume` must verify the worktree and Git Bisect state before proceeding; it must never blindly rerun a destructive command.
 
-### 3.9 Reports
+#### 3.9 Reports
 
 Produce:
 
@@ -218,7 +218,7 @@ Produce:
 
 Report the conclusion level accurately: confirmed by oracle, probable candidate, or inconclusive. Explain skipped commits and limitations.
 
-### 3.10 Doctor, preview and cleanup commands
+#### 3.10 Doctor, preview and cleanup commands
 
 - `doctor`: verify Git/runtime prerequisites and identify an active native Bisect state if visible.
 - `plan` or `start --dry-run`: resolve refs and display commands without executing historical project code.
@@ -226,29 +226,29 @@ Report the conclusion level accurately: confirmed by oracle, probable candidate,
 - `report`: regenerate a report from the saved evidence without rerunning tests.
 - `cleanup`: only remove worktrees and directories whose ownership is confirmed by the session manifest; require confirmation if state is uncertain.
 
-## P1 — High-value features after the core works
+### P1 — High-value features after the core works
 
-### 3.11 Retry policy for flaky checks
+#### 3.11 Retry policy for flaky checks
 
 Allow a bounded retry count. Preserve every attempt. A pass-fail-pass pattern should not be silently forced into a clean good/bad classification. After inconsistent results, classify as flaky/inconclusive and skip or pause according to policy.
 
 Be careful not to overuse retries: they increase run time and can hide a real intermittent regression. Include the retry policy in the report.
 
-### 3.12 Session resume and replay
+#### 3.12 Session resume and replay
 
 Persist the plan, resolved endpoints, classifications and Git Bisect log. On resume, compare the current worktree and repo state with the session manifest. If state differs unexpectedly, stop and explain rather than guessing.
 
-### 3.13 Monorepo-aware checks
+#### 3.13 Monorepo-aware checks
 
 Let users define a working subdirectory and a path scope. Display the scope visibly. Native Git supports path-limited Bisect, but path filters alter the search semantics, so document this and test it against fixtures.
 
 Later, discover common workspaces (npm/pnpm/yarn, Cargo workspaces, Python package layouts) only as hints; do not automatically assume the correct test command.
 
-### 3.14 Environment mismatch diagnostics
+#### 3.14 Environment mismatch diagnostics
 
 Record runtime, OS and dependency-lock hashes at every revision. Flag that dependency installation, toolchain versions, environment variables or external services may differ across commits. Do not describe an environment mismatch as the root cause unless the evidence supports it.
 
-### 3.15 Guided test profiles
+#### 3.15 Guided test profiles
 
 Provide templates for:
 
@@ -261,19 +261,19 @@ Provide templates for:
 
 Start with functional and build profiles only. Design types so later profiles can be added without rewriting the entire engine.
 
-### 3.16 Performance regression mode
+#### 3.16 Performance regression mode
 
 This could become a real differentiator, but do it after ordinary bisect is reliable. Run a benchmark multiple times on each candidate, warm up the benchmark if needed, capture the machine/environment fingerprint, compare medians or another documented robust statistic, and require a user-defined threshold. Noise, CPU load, thermal throttling and dependency drift can all cause false positives.
 
-### 3.17 Export to GitHub issues / pull requests
+#### 3.17 Export to GitHub issues / pull requests
 
 Generate a GitHub-ready Markdown summary locally first. Later, add optional authenticated publishing. Publishing must be an explicit user action, not a side effect of running a local investigation.
 
-### 3.18 HTML evidence viewer
+#### 3.18 HTML evidence viewer
 
 An optional local HTML report could provide a commit timeline, searchable tested revisions, expandable logs, diff links and filterable skipped revisions. Keep it local and static initially; do not start with a web server or account system.
 
-## P2 — Useful later, but not first-release work
+### P2 — Useful later, but not first-release work
 
 - Real container isolation for untrusted repositories.
 - CI integration and artifact uploads.
@@ -285,7 +285,7 @@ An optional local HTML report could provide a commit timeline, searchable tested
 - Parallel testing, if correctness and resource isolation can be maintained.
 - Optional AI-generated commit explanations grounded in collected evidence.
 
-## Explicitly out of scope at the start
+### Explicitly out of scope at the start
 
 - Microservices.
 - Multi-tenant cloud backend.
@@ -297,11 +297,11 @@ An optional local HTML report could provide a commit timeline, searchable tested
 
 ---
 
-# 4. Recommended user experience and command design
+## 4. Recommended user experience and command design
 
 Use a CLI name that does not pretend to replace Git itself. `bisectpilot` is a working name; check package-name availability and trademark constraints before publishing.
 
-## Proposed command surface
+### Proposed command surface
 
 ```text
 bisectpilot doctor
@@ -351,7 +351,7 @@ Proceed to execute historical project code? [y/N]
 
 That transcript is an illustrative interface, not output from a working build.
 
-## CLI interaction rules
+### CLI interaction rules
 
 - Support non-interactive mode for scripts and CI.
 - Show the exact resolved commit SHAs, not only friendly tags.
@@ -363,9 +363,9 @@ That transcript is an illustrative interface, not output from a working build.
 
 ---
 
-# 5. Architecture: modular monolith, not microservices
+## 5. Architecture: modular monolith, not microservices
 
-## High-level view
+### High-level view
 
 ```mermaid
 flowchart TD
@@ -383,10 +383,10 @@ flowchart TD
     Store --> Report
 ```
 
-## Boundaries and responsibilities
+### Boundaries and responsibilities
 
 | Module | Responsibility | Must not do |
-|---|---|---|
+| --- | --- | --- |
 | `cli` | Parse arguments, prompts, progress and user-facing errors | Implement Git logic or classification rules |
 | `application` | Coordinate preflight, setup, run, resume and cleanup | Construct shell commands by string concatenation |
 | `domain` | Session states, classification policy, result types and invariants | Read the filesystem or invoke Git directly |
@@ -398,7 +398,7 @@ flowchart TD
 
 For the first release, the runner can be a small internal module invoked through the installed Node executable. Its location and session configuration must remain stable throughout the bisect.
 
-## Proposed source tree
+### Proposed source tree
 
 ```text
 git-bisectpilotpilot/
@@ -464,15 +464,15 @@ git-bisectpilotpilot/
 
 Treat this as a target map, not a demand to create every file on day one. Begin with the smallest vertical slice and extract modules when their boundaries become clear.
 
-## Why this is not microservices
+### Why this is not microservices
 
 The product runs on a developer's machine, uses local Git repositories and performs a sequential investigation. Network services, distributed locks, message queues and service-to-service authentication would introduce operational burden without solving the main problem. A modular monolith gives clean boundaries without deployment complexity.
 
 ---
 
-# 6. Runtime behavior and result classification
+## 6. Runtime behavior and result classification
 
-## 6.1 Investigation sequence
+### 6.1 Investigation sequence
 
 1. Resolve the repo root and verify that it is a Git repository.
 2. Check Git version and existing Bisect state in the target worktree.
@@ -491,7 +491,7 @@ The product runs on a developer's machine, uses local Git repositories and perfo
 
 The runner must be located outside the checked-out revision. Git's own documentation similarly warns that keeping the bisect script outside the repository is safer because it avoids interaction with changing checkouts.
 
-## 6.2 Classification policy
+### 6.2 Classification policy
 
 Use a typed internal classification:
 
@@ -512,12 +512,12 @@ The reason should be machine-derived and human-readable, for example:
 
 Do not identify “expected test failure” only by searching for the word `Error` in stdout. Prefer a specific test command and its exit status, with separate preflight/setup/build checks.
 
-## 6.3 Translate internal results to native Git Bisect exit codes
+### 6.3 Translate internal results to native Git Bisect exit codes
 
 The wrapper process, not the test command itself, returns the exit code consumed by Git:
 
 | Internal classification | Runner exit code | Meaning to Git |
-|---|---:|---|
+| --- | ---: | --- |
 | `good` | `0` | Good/old |
 | `bad` | `1` | Bad/new |
 | `skip` | `125` | This revision cannot be tested; skip |
@@ -527,7 +527,7 @@ The wrapper process, not the test command itself, returns the exit code consumed
 
 Choose the mapping in one tested function. Never pass raw test exit statuses directly to Git. See the official Bisect `run` contract for the reason: status `125` has special skip meaning; other `1–127` statuses classify a revision as bad; other values abort the run.
 
-## 6.4 Setup and dependency behavior
+### 6.4 Setup and dependency behavior
 
 Historical revisions can have different package manifests, lockfiles or toolchains. A one-time install may be incorrect if dependencies changed across the history.
 
@@ -541,7 +541,7 @@ For MVP:
 
 Later, dependency caches may be keyed by OS, runtime version, package manager and lockfile digest. Never reuse a dependency directory if its key is not a close match to the current revision's dependency inputs.
 
-## 6.5 Merge history and skipped commits
+### 6.5 Merge history and skipped commits
 
 Not every repository has a straight line of commits. Merge commits, multiple good boundaries, a shallow clone, or a large range of untestable revisions may complicate interpretation. Native Git has options such as first-parent search, multiple known-good commits, path limits, skip ranges and bisect log/replay. Make advanced options explicit rather than silently changing the search's semantics.
 
@@ -549,9 +549,9 @@ If too many nearby revisions are skipped, Git may be unable to identify one exac
 
 ---
 
-# 7. Configuration and data model
+## 7. Configuration and data model
 
-## 7.1 Example config
+### 7.1 Example config
 
 A structured command object helps avoid shell-string assembly in the tool itself:
 
@@ -588,7 +588,7 @@ This is illustrative. The test command syntax depends on the project's chosen te
 
 The tool must validate this config at load time and provide clear errors. Keep user configuration and runner implementation outside the historical checkout so old commits cannot replace the runner or delete its settings.
 
-## 7.2 Suggested session shape
+### 7.2 Suggested session shape
 
 ```ts
 interface InvestigationSessionV1 {
@@ -636,7 +636,7 @@ Keep detailed command results in a separate append-only JSONL file. Include sche
 
 Do not store the complete inherited environment or secret values. Save a safe fingerprint and the names of required environment variables only.
 
-## 7.3 Atomic writes and recovery
+### 7.3 Atomic writes and recovery
 
 - Write updates to a temporary file, flush/close it, then rename into place where supported.
 - Append one JSONL event per completed step.
@@ -646,11 +646,11 @@ Do not store the complete inherited environment or secret values. Save a safe fi
 
 ---
 
-# 8. Process execution and security model
+## 8. Process execution and security model
 
 This is the most important engineering area after correct classification. The tool runs builds and tests from historical code, which can execute arbitrary scripts with the user's permissions.
 
-## 8.1 Safe subprocess design
+### 8.1 Safe subprocess design
 
 Use Node's `child_process.spawn()` or `execFile()` with the executable and argument list separated. Set `shell: false` unless there is a deliberate, documented need for shell syntax. Do not concatenate user input into a shell command. Node's official documentation warns that shell metacharacters in unsanitized input can trigger arbitrary command execution.
 
@@ -670,7 +670,7 @@ This code is a design illustration; production code must also handle spawn error
 
 Important nuance: a command such as `npm test` will itself run the package's scripts. Avoiding shell interpolation in our launcher does not make the target repository trustworthy. Explicit consent and a real sandbox for hostile repositories remain important.
 
-## 8.2 Environment policy
+### 8.2 Environment policy
 
 Do not pass every parent process environment variable through by default. Define a minimal baseline that includes PATH and the variables needed by the process, then add project-specific variables by explicit allowlist. The design must account for platform requirements and not make the tool unusable by stripping required runtime paths.
 
@@ -680,7 +680,7 @@ Do not pass every parent process environment variable through by default. Define
 - Redact likely tokens, authorization headers, passwords and private keys from report output.
 - Explain that redaction is best-effort and is not a substitute for secret-free test environments.
 
-## 8.3 Resource limits
+### 8.3 Resource limits
 
 - Per-step timeout.
 - Maximum output bytes per command and per session.
@@ -690,13 +690,13 @@ Do not pass every parent process environment variable through by default. Define
 - Child-process-tree cleanup where the platform allows it.
 - Disk-usage awareness for large logs and worktrees.
 
-## 8.4 Worktree cleanup rules
+### 8.4 Worktree cleanup rules
 
 Only remove the exact path recorded as a tool-created worktree in a valid session manifest. Resolve paths, check ownership metadata and verify they are inside the intended session directory before deletion. Do not use broad globs, string-prefix checks alone, or `rm -rf` with an unchecked path.
 
 Never invoke destructive Git commands in the user's original checkout as a cleanup shortcut. If state is unclear, prefer leaving a recoverable worktree and explaining the next safe action over forcibly deleting it.
 
-## 8.5 Security levels
+### 8.5 Security levels
 
 **MVP safety level:** separate worktree, explicit consent, no shell-string interpolation by our launcher, limited environment, timeouts, capped logs, session-owned cleanup and no cloud upload.
 
@@ -704,11 +704,11 @@ Never invoke destructive Git commands in the user's original checkout as a clean
 
 ---
 
-# 9. Testing strategy: prove the tool discovers the right commit
+## 9. Testing strategy: prove the tool discovers the right commit
 
 A real integration test using disposable repositories is mandatory. Unit tests cannot prove that Git Bisect, checkout transitions and cleanup all work together.
 
-## 9.1 Build deterministic fixture repositories
+### 9.1 Build deterministic fixture repositories
 
 Create a test helper that runs `git init`, creates a sequence of commits and adds a small regression test. For example:
 
@@ -721,9 +721,9 @@ The expected result is commit D. The automated integration test must compare the
 
 Create separate fixtures for a build failure, a flaky test, an untestable revision, a missing executable, a timeout, a test that behaves differently at the two endpoints, dirty original files and interrupted cleanup.
 
-## 9.2 Test categories
+### 9.2 Test categories
 
-### Unit tests
+#### Unit tests
 
 - Config schema validation.
 - Commit/ref normalization.
@@ -735,7 +735,7 @@ Create separate fixtures for a build failure, a flaky test, an untestable revisi
 - Report rendering from a fixed evidence fixture.
 - Cleanup path validation.
 
-### Integration tests
+#### Integration tests
 
 - Create and remove a real linked worktree.
 - Verify current `HEAD` in the test worktree changes while original `HEAD` stays where it was.
@@ -745,7 +745,7 @@ Create separate fixtures for a build failure, a flaky test, an untestable revisi
 - Verify abort statuses stop the search.
 - Verify a cancelled run leaves enough metadata for recovery.
 
-### End-to-end tests
+#### End-to-end tests
 
 Run the CLI as a user would:
 
@@ -758,7 +758,7 @@ Run the CLI as a user would:
 7. Verify the original checkout and test files remain unchanged.
 8. Run cleanup and confirm that only tool-owned resources were removed.
 
-## 9.3 Acceptance criteria
+### 9.3 Acceptance criteria
 
 Do not declare version one done until:
 
@@ -775,9 +775,9 @@ Do not declare version one done until:
 
 ---
 
-# 10. Development roadmap and milestones
+## 10. Development roadmap and milestones
 
-## Milestone 0 — Repository and spec (first hour)
+### Milestone 0 — Repository and spec (first hour)
 
 - Inspect the environment and current repository.
 - Create `AGENTS.md`, the README outline and architecture notes.
@@ -787,7 +787,7 @@ Do not declare version one done until:
 
 **Exit condition:** `npm test` and `npm run typecheck` run successfully on the empty scaffold.
 
-## Milestone 1 — Git adapter and safe worktree lifecycle
+### Milestone 1 — Git adapter and safe worktree lifecycle
 
 Implement:
 
@@ -800,7 +800,7 @@ Implement:
 
 **Exit condition:** integration tests prove that worktree creation and cleanup do not move or modify the original checkout.
 
-## Milestone 2 — Minimal regression runner
+### Milestone 2 — Minimal regression runner
 
 Implement one deterministic fixture and a stable runner outside the checked-out source tree. The runner reads the current commit SHA, runs a fixed test command, records result evidence and maps the outcome to Git's exit contract.
 
@@ -808,25 +808,25 @@ Implement one deterministic fixture and a stable runner outside the checked-out 
 
 Do not move ahead until this works reliably.
 
-## Milestone 3 — Endpoint preflight and profiles
+### Milestone 3 — Endpoint preflight and profiles
 
 Add good/bad endpoint checks and initial profiles for functional regressions and build failures. Keep profile-specific result policy separate from the process runner.
 
 **Exit condition:** tests cover endpoints that agree, endpoints that contradict, and revisions that cannot be tested.
 
-## Milestone 4 — Session persistence, reporting and cancellation
+### Milestone 4 — Session persistence, reporting and cancellation
 
 Add versioned session manifests, JSONL evidence, Markdown/JSON reports, timeouts, output caps, Ctrl+C handling and recovery state.
 
 **Exit condition:** a deliberately interrupted fixture can be inspected after restart, and the tool does not silently discard evidence.
 
-## Milestone 5 — Usable CLI and documentation
+### Milestone 5 — Usable CLI and documentation
 
 Add `doctor`, `init`, `plan`, `start`, `status`, `resume`, `report`, `cleanup` and `list`. Build a no-network, three-minute demonstration.
 
 **Exit condition:** a new developer can follow the README and reproduce the demo on a clean checkout.
 
-## Milestone 6 — Real-world beta
+### Milestone 6 — Real-world beta
 
 Test on several small open-source repositories with different test runners and histories. Record where setup fails, how often revisions are skipped and what reports confuse users. Publish limitations and ask maintainers for feedback.
 
@@ -834,11 +834,11 @@ Test on several small open-source repositories with different test runners and h
 
 ---
 
-# 11. One-day build plan versus a real product plan
+## 11. One-day build plan versus a real product plan
 
 A reliable open-source developer tool needs more than a single hackathon day. Keep the ambitions separate.
 
-## One-day demonstration scope (8–12 focused hours)
+### One-day demonstration scope (8–12 focused hours)
 
 1. TypeScript CLI scaffold.
 2. Disposable fixture repository with a single planted functional regression.
@@ -851,16 +851,16 @@ A reliable open-source developer tool needs more than a single hackathon day. Ke
 
 Avoid resume, HTML visualizations, GitHub publishing, generalized monorepo detection, performance mode and container security in the one-day build unless the above is already robust.
 
-## Real-world v1.0 scope
+### Real-world v1.0 scope
 
 Add endpoint verification, session recovery, safe process handling, environment control, comprehensive tests, versioned storage, redaction, detailed reports, clean-install documentation and cross-platform behavior. This is what turns a hackathon prototype into a tool other developers can trust.
 
 ---
 
-# 12. How to make it useful across real-world scenarios
+## 12. How to make it useful across real-world scenarios
 
 | Scenario | Profile/check | Specific feature needed | Important caveat |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Login or feature broke | Functional | Reproducible unit/integration test | The test must actually reflect the user-visible bug |
 | Build started failing | Build | Treat build failure as the bad signal | Distinguish a compiler/toolchain issue from code regression where possible |
 | A library update broke tests | Functional / dependency | Setup command and per-revision lockfile-aware environment | Old manifests may require different runtime versions |
@@ -874,7 +874,7 @@ Add endpoint verification, session recovery, safe process handling, environment 
 | Developer suspects bad merge | Merge-history option, later | Explicit first-parent or merge strategy | Must not silently change search semantics |
 | Bug appears only in one environment | Environment profile, later | Runtime/OS/dependency fingerprint | Local reproduction may still differ from production |
 
-## A particularly useful later feature: evidence confidence, not a fake certainty score
+### A particularly useful later feature: evidence confidence, not a fake certainty score
 
 Avoid displaying a made-up “97% confident” score. Instead show transparent evidence indicators:
 
@@ -891,11 +891,11 @@ A human can then judge the strength of the result based on visible facts.
 
 ---
 
-# 13. Suggested skills and rules for the permitted coding agent
+## 13. Suggested skills and rules for the permitted coding agent
 
 Use one always-on project rule file and several focused skills. Skill names below are proposed project instructions, not claims that a preexisting public skill with that exact name exists.
 
-## Root `AGENTS.md`
+### Root `AGENTS.md`
 
 Include rules such as:
 
@@ -912,7 +912,7 @@ Include rules such as:
 - Update tests, docs and architecture notes when behavior changes.
 - Follow Ponytail FULL engineering discipline if it is allowed by the event's rules.
 
-## Focused skill directory
+### Focused skill directory
 
 ```text
 skills/
@@ -924,7 +924,7 @@ skills/
 └── open-source-release/SKILL.md
 ```
 
-### What each skill should teach
+#### What each skill should teach
 
 **Git Bisect domain:** endpoint semantics, exit-code mapping, skipped revisions, merge histories, multiple known-good commits, interpretation of “first bad” and when the result is inconclusive.
 
@@ -938,7 +938,7 @@ skills/
 
 **Open-source release:** README, installation, supported platforms, example config, limitations, license, changelog, GitHub Actions and reproducible release.
 
-## Recommended agent workflow
+### Recommended agent workflow
 
 For every meaningful feature:
 
@@ -953,9 +953,9 @@ The agent should not generate the entire repository in one giant response. Let t
 
 ---
 
-# 14. Definition of done for a credible open-source launch
+## 14. Definition of done for a credible open-source launch
 
-## Functionality
+### Functionality
 
 - [ ] Can find a deterministic regression in a temporary Git repository.
 - [ ] Validates the good and bad endpoints.
@@ -965,7 +965,7 @@ The agent should not generate the entire repository in one giant response. Let t
 - [ ] Supports cancellation and safe recovery.
 - [ ] Generates Markdown and JSON reports.
 
-## Safety
+### Safety
 
 - [ ] Never checks out or resets the original worktree during an investigation.
 - [ ] Only deletes session-owned paths after validation.
@@ -974,7 +974,7 @@ The agent should not generate the entire repository in one giant response. Let t
 - [ ] Correctly distinguishes timeout/internal error from a bad revision.
 - [ ] Documents that a worktree is not a security sandbox.
 
-## Engineering quality
+### Engineering quality
 
 - [ ] TypeScript strict mode and typecheck pass.
 - [ ] Unit tests cover classification and state transitions.
@@ -984,7 +984,7 @@ The agent should not generate the entire repository in one giant response. Let t
 - [ ] Reports contain only recorded evidence, not fabricated claims.
 - [ ] Session formats are versioned and validated.
 
-## Open-source readiness
+### Open-source readiness
 
 - [ ] README states the problem, prerequisites, installation and usage.
 - [ ] License has been chosen intentionally.
@@ -996,7 +996,7 @@ The agent should not generate the entire repository in one giant response. Let t
 
 ---
 
-# 15. Recommended public positioning
+## 15. Recommended public positioning
 
 **One-sentence pitch:**
 
@@ -1008,25 +1008,25 @@ The agent should not generate the entire repository in one giant response. Let t
 
 Avoid saying “AI finds the root cause automatically.” The core product is a deterministic investigation workflow. An optional AI summary can be added later only if it cites actual commit diffs and recorded test evidence and is clearly labeled as an interpretation.
 
-## What makes the demo memorable
+### What makes the demo memorable
 
 Use an intentionally broken fixture repo whose injected regression commit is known to the test author but not to the running tool. Run the actual search, reveal the discovered SHA, open the corresponding diff, show the evidence record and verify that the user's original checkout stayed unchanged. The strongest demo is a correct result backed by observable proof, not an animated progress bar.
 
 ---
 
-# 16. External references to use during implementation
+## 16. External references to use during implementation
 
-1. **Git Bisect official documentation** — automated runs, known-good/known-bad endpoints, skip status, logs/replay and alternate terms: https://git-scm.com/docs/git-bisect/
-2. **Git worktree official documentation** — linked worktrees, detached worktrees and lifecycle: https://git-scm.com/docs/git-worktree.html
-3. **Node.js child process official documentation** — `spawn`, argument arrays, environment handling, timeouts and shell-injection warnings: https://nodejs.org/api/child_process.html
-4. **Existing hosted bisect product reference** — Bisect documentation, useful for understanding the baseline market and avoiding a thin-wrapper product: https://bisect.sh/docs
-5. **Existing parallel bisect project reference** — `git-pisect`, useful for understanding that parallel regression search is an existing approach, not a novel feature by itself: https://github.com/hoelzro/git-pisect
+1. **Git Bisect official documentation** — automated runs, known-good/known-bad endpoints, skip status, logs/replay and alternate terms: <https://git-scm.com/docs/git-bisect/>
+2. **Git worktree official documentation** — linked worktrees, detached worktrees and lifecycle: <https://git-scm.com/docs/git-worktree.html>
+3. **Node.js child process official documentation** — `spawn`, argument arrays, environment handling, timeouts and shell-injection warnings: <https://nodejs.org/api/child_process.html>
+4. **Existing hosted bisect product reference** — Bisect documentation, useful for understanding the baseline market and avoiding a thin-wrapper product: <https://bisect.sh/docs>
+5. **Existing parallel bisect project reference** — `git-pisect`, useful for understanding that parallel regression search is an existing approach, not a novel feature by itself: <https://github.com/hoelzro/git-pisect>
 
 Use the latest official Git and Node.js documentation when implementing version-specific behavior. This blueprint is a design plan; it is not a claim that the product has already been implemented or tested.
 
 ---
 
-# Final build order
+## Final build order
 
 If beginning today, implement in this exact order:
 
@@ -1045,15 +1045,15 @@ If beginning today, implement in this exact order:
 
 ---
 
-# 17. Research review added in version 2.0
+## 17. Research review added in version 2.0
 
-## 17.1 Scope and honesty of this review
+### 17.1 Scope and honesty of this review
 
 This review searches across the primary Git and Node.js documentation, existing regression-bisection tools, security guidance, and relevant software-engineering research on regression localization, flaky tests, change impact, delta debugging, and LLM-assisted fault localization. It is a focused research review, **not a claim that every website or every paper in existence has been read**. The web is not a finite, enumerable set, some publisher pages expose only abstracts, and results are constrained by publication access. Where full accessible text is available, findings were checked against it; where it is not, the bibliography explicitly identifies the paper or abstract as the source.
 
 Date of review: 19 October 2026. Links below should be checked again during implementation because online documentation and project capabilities can change.
 
-## 17.2 Research-derived conclusions that affect the product
+### 17.2 Research-derived conclusions that affect the product
 
 1. **The algorithm is not the product.** Git already provides native bisection. Chromium and Mozilla have dedicated build-regression tools, and Bisect.sh has a hosted GitHub workflow and local CLI. A new tool must provide a clearly useful workflow, not merely repackage a command.
 2. **Endpoint verification is a first-class feature.** Chromium's own `bisect-builds.py` has a `--verify-range` option precisely because a wrong range or mismatched reproduction environment can make the entire search useless. BisectPilot should verify both boundary revisions before spending time testing the middle.
@@ -1066,39 +1066,39 @@ Date of review: 19 October 2026. Links below should be checked again during impl
 9. **Delta debugging is a separate, potentially valuable extension.** Once a regression is identified, a future extension could minimize a reproducing input, request, or test case. It should not be mixed into the first release's critical bisect path.
 10. **Do not optimize test selection prematurely.** Research on regression-test selection documents trade-offs and varying empirical results across techniques. First build a trustworthy full-oracle path; then consider change-impact-informed test selection, always labeling it as an optimization and keeping a safe full-test fallback.
 
-## 17.3 Existing tools and what they imply for differentiation
+### 17.3 Existing tools and what they imply for differentiation
 
-### Native Git Bisect
+#### Native Git Bisect
 
 Official documentation describes a binary search over history and the automated `git bisect run` protocol. Its runner should return `0` when the current revision is good, `1`–`127` excluding `125` when bad, and `125` to skip a revision that cannot be tested; other exit statuses abort the run. Therefore, a wrapper must not simply pass arbitrary package/test failures through as raw exit codes: a missing executable, runner bug, cancellation or infrastructure problem must not accidentally become “bad commit.” Validate the command before the search and use a small external adapter script that maps only well-understood outcomes to Git's protocol.
 
 Reference: <https://git-scm.com/docs/git-bisect/>
 
-### Git Worktree
+#### Git Worktree
 
 Git worktrees allow multiple working trees attached to one repository and are intended for cases where a developer wants to work elsewhere without disturbing an in-progress working tree. Worktrees are **checkout isolation, not a security boundary**. They share repository storage and some repository-level information. The manager must create a unique tool-owned path, keep an ownership record, inspect it before cleanup, and never delete a path solely because a session file says it exists.
 
 Reference: <https://git-scm.com/docs/git-worktree.html>
 
-### Chromium `bisect-builds.py`
+#### Chromium `bisect-builds.py`
 
 Chromium documents a workflow that finds a regression across archived builds, can drive automatic checks, and offers endpoint validation through `--verify-range`. It also warns that the revision range and the environment affect whether a result is useful. Product lesson: validate endpoints early, retain environment/revision metadata, and make the check reproducible.
 
 Reference: <https://www.chromium.org/developers/bisect-builds-py/>
 
-### Mozilla `mozregression`
+#### Mozilla `mozregression`
 
 Mozilla's `mozregression` supports automatic bisection using a user-supplied command and variables pointing to the build being tested. This illustrates the importance of a controlled regression oracle and application-specific adapters. Product lesson: the runner should support profiles/adapters while keeping the core engine generic.
 
 References: <https://mozilla.github.io/mozregression/documentation/> and <https://mozilla.github.io/mozregression/documentation/automatic-bisection.html>
 
-### Bisect.sh
+#### Bisect.sh
 
 Bisect.sh documents a GitHub App flow in which a user can trigger a bisect from an issue and a local CLI workflow. Product lesson: GitHub issue/PR integrations and remote workflows already exist in the ecosystem; do not market them as novel by themselves. Differentiate on local-first operation, safe execution, evidence provenance, recovery, clear outcomes and a framework that can be audited.
 
 Reference: <https://bisect.sh/docs>
 
-### Product differentiation statement
+#### Product differentiation statement
 
 Recommended positioning:
 
@@ -1108,9 +1108,9 @@ Do not claim it is the first automated bisect tool or that it always finds the t
 
 ---
 
-# 18. Research findings and how they change the roadmap
+## 18. Research findings and how they change the roadmap
 
-## 18.1 Regression bisection assumes a usable test oracle
+### 18.1 Regression bisection assumes a usable test oracle
 
 Git's built-in search uses the answers good/bad/skip to reduce a search space. This works best when the tested behavior is meaningfully consistent over the range. In real repositories, the bug may have been introduced and then fixed, introduced multiple times, or emerge only due to a combination of changes. A binary search may still identify a transition but cannot prove that the one candidate is the sole root cause under non-monotonic behavior.
 
@@ -1127,7 +1127,7 @@ The final check is evidence that the found boundary matches the oracle; it is no
 
 Reference: <https://git-scm.com/docs/git-bisect/>
 
-## 18.2 Historical tests do not always transplant to old snapshots
+### 18.2 Historical tests do not always transplant to old snapshots
 
 A 2024 paper in *Empirical Software Engineering*, “Hunting bugs: Towards an automated approach to identifying which change caused a bug through regression testing,” analyzes whether regression tests can be used on historical snapshots. It explicitly discusses “transplantability” and the problems of older revisions not compiling or tests not running correctly. This backs a central requirement: the same oracle may not be runnable at every historical commit.
 
@@ -1142,7 +1142,7 @@ A 2024 paper in *Empirical Software Engineering*, “Hunting bugs: Towards an au
 
 Reference: <https://link.springer.com/article/10.1007/s10664-024-10479-z>
 
-## 18.3 Flakiness is a product problem, not a cosmetic edge case
+### 18.3 Flakiness is a product problem, not a cosmetic edge case
 
 The multivocal review by Rasheed, Tahir, Dietrich, Hashemi and Zhang surveys research and practitioner writing about flaky tests and organizes the topic around causes, detection, impact and responses. The authors describe a wide body of reviewed material; the journal version analyzes 200 focused articles/posts from an initial pool of 560, including 109 academic and 91 practitioner sources. A separate CANNIER study evaluated 89,668 tests across 30 Python projects and investigated the cost of rerun-based detection.
 
@@ -1158,10 +1158,11 @@ The multivocal review by Rasheed, Tahir, Dietrich, Hashemi and Zhang surveys res
 - Do not install a heavy ML flaky-test detector into the MVP. The immediate value is honest bounded reruns with evidence.
 
 References:
+
 - <https://doi.org/10.1016/j.jss.2023.111837>
 - <https://link.springer.com/article/10.1007/s10664-023-10307-w>
 
-## 18.4 Change-impact analysis should be a later optimization
+### 18.4 Change-impact analysis should be a later optimization
 
 Change-impact analysis asks what other modules or tests may be affected by a change. A 2021 systematic mapping study in the *Journal of Systems and Software* covered 111 papers and describes the range of ways change impacts are studied. A systematic review of empirical regression-test-selection techniques found a varied evidence base rather than a universally superior technique.
 
@@ -1174,10 +1175,11 @@ Change-impact analysis asks what other modules or tests may be affected by a cha
 - Do not claim faster testing is safer unless the selected test strategy is validated on the target project.
 
 References:
+
 - <https://www.sciencedirect.com/science/article/pii/S016412122030282X>
 - <https://doi.org/10.1016/j.infsof.2009.07.001>
 
-## 18.5 SZZ and blame should be supporting evidence only
+### 18.5 SZZ and blame should be supporting evidence only
 
 SZZ uses bug-fixing information and line history to infer potentially bug-introducing commits. Research has repeatedly studied its limitations. A 2024 Springer paper on refining SZZ with bug-discussion data describes “tangled commits” and “ghost commits,” and reports that in its Mozilla dataset, ordinary SZZ could not link roughly 40% of bug-fixing PRs to bug-introducing PRs because there was no shared file between them. These results are dataset-specific and should not be generalized to every repository, but they make the main product lesson clear: author, blame, text similarity and issue keywords are not proof.
 
@@ -1188,11 +1190,12 @@ SZZ uses bug-fixing information and line history to infer potentially bug-introd
 - If a future candidate-ranking helper uses heuristics, label it as ranking/recommendation, list its signals and preserve the deterministic bisect result separately.
 
 References:
+
 - <https://link.springer.com/article/10.1007/s10664-024-10511-2>
 - <https://ieeexplore.ieee.org/abstract/document/7588121>
 - <https://dl.acm.org/doi/10.1145/3340482.3342742>
 
-## 18.6 LLM assistance must be optional and evidence-grounded
+### 18.6 LLM assistance must be optional and evidence-grounded
 
 Research on LLM-based fault localization has found that results depend strongly on the code context supplied. One study on Defects4J reported gains over a baseline with function-level context and error logs, but a substantial decline when the context scope expanded to class-level. A 2025 study of LLM-generated regression tests evaluated only 22 commits from three programs and reported that results varied by input format. These studies show promise, but they do not justify making an AI model the source of truth for a regression search.
 
@@ -1207,11 +1210,12 @@ Research on LLM-based fault localization has found that results depend strongly 
 - Never upload private source, tokens, or raw logs by default.
 
 References:
+
 - <https://arxiv.org/abs/2308.15276>
 - <https://arxiv.org/html/2501.11086v1>
 - <https://arxiv.org/html/2412.03905v2>
 
-## 18.7 Delta debugging is a valuable future extension
+### 18.7 Delta debugging is a valuable future extension
 
 Zeller and Hildebrandt's paper on simplifying and isolating failure-inducing inputs describes reducing a failing input to a smaller input that still reproduces the failure. This is complementary to commit bisection: bisection identifies a revision transition; delta debugging can reduce the reproducer or configuration after the regression is found.
 
@@ -1221,11 +1225,11 @@ Reference: <https://www.st.cs.uni-saarland.de/papers/tse2002/>
 
 ---
 
-# 19. Additional product ideas worth considering
+## 19. Additional product ideas worth considering
 
 The original roadmap includes many features already. This section adds recommendations from the competitive and research review, ordered by product value.
 
-## 19.1 P0: requirements for a trustworthy product
+### 19.1 P0: requirements for a trustworthy product
 
 - **Oracle contract:** every investigation must define exactly what is being measured and what result means good/bad.
 - **Endpoint proof:** store outcomes from the known-good and known-bad revisions before search.
@@ -1240,7 +1244,7 @@ The original roadmap includes many features already. This section adds recommend
 - **Noninteractive mode:** allow safe CI usage without prompts, but require configuration to explicitly permit running commands.
 - **Structured final status:** distinguish found, ambiguous, inconclusive, cancelled, failed preflight, and failed cleanup.
 
-## 19.2 P1: substantial usability improvements
+### 19.2 P1: substantial usability improvements
 
 - **Regression profiles:** functional test, build failure, performance benchmark, security regression check and custom script.
 - **Commit context view:** changed files, diff summary, parent, timestamp, author, branches containing the commit and recorded test outcome.
@@ -1253,7 +1257,7 @@ The original roadmap includes many features already. This section adds recommend
 - **Report redaction preview:** let users inspect exactly what will be included before exporting.
 - **Diagnostics bundle:** one portable archive with metadata, bounded logs and reports, with clear opt-in and exclusion controls.
 
-## 19.3 P2: integrations and advanced analysis
+### 19.3 P2: integrations and advanced analysis
 
 - **GitHub issue/PR export:** attach a verified report, not an automatic assertion that a particular author caused a bug.
 - **GitHub Actions artifact upload:** export the report to workflow artifacts only when explicitly enabled. GitHub documents artifacts as a way to preserve and share files such as logs, test results and screenshots after a workflow finishes: <https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts>.
@@ -1265,7 +1269,7 @@ The original roadmap includes many features already. This section adds recommend
 - **Container execution:** consider rootless containers for an additional isolation option. Docker documents rootless mode as running daemon and containers as a non-root user, but it is not a substitute for threat modeling and appropriate isolation settings: <https://docs.docker.com/engine/security/rootless/>.
 - **Package/release supply-chain hygiene:** when npm publishing becomes relevant, use supported provenance/trusted publishing rather than long-lived publish tokens where possible: <https://docs.npmjs.com/trusted-publishers/>.
 
-## 19.4 Features I do not recommend yet
+### 19.4 Features I do not recommend yet
 
 - Automatic code changes or automatic reverts after finding a candidate.
 - An LLM that decides a commit is good or bad.
@@ -1279,7 +1283,7 @@ The original roadmap includes many features already. This section adds recommend
 
 ---
 
-# 20. Operational model and state machine
+## 20. Operational model and state machine
 
 The implementation should define explicit session states rather than scattering booleans through the source.
 
@@ -1306,7 +1310,7 @@ Recommended states (v2):
 
 Every transition should be persisted in the event ledger. The session store should be treated as a recovery aid, not as unquestionable truth: on resume, inspect the real repository/worktree/Git state before acting.
 
-## 20.1 Suggested event ledger schema
+### 20.1 Suggested event ledger schema
 
 Each event should have a schema version and include only the data needed for recovery and explanation.
 
@@ -1330,7 +1334,7 @@ Each event should have a schema version and include only the data needed for rec
 
 The example is illustrative. Use a generated ID format and an actual commit hash in implementation. Consider separate records for process start/exit so an interrupted run can be recognized as interrupted rather than classified from missing output.
 
-## 20.2 Atomic persistence
+### 20.2 Atomic persistence
 
 - Write new session data to a temporary sibling file and atomically rename where the platform supports it.
 - Append ledger events rather than rewriting the entire run history each time.
@@ -1341,11 +1345,11 @@ The example is illustrative. Use a generated ID format and an actual commit hash
 
 ---
 
-# 21. Exact test classification design
+## 21. Exact test classification design
 
 Git Bisect's runner protocol is stricter than “0 means pass, anything else means failure.” In a test harness, a nonzero exit might mean a real test failure, a missing executable, a permissions error, an out-of-memory condition, a timeout or a runner bug. Git interprets exit statuses in specific ways; the tool must translate an internally defined outcome to the Git protocol deliberately.
 
-## 21.1 Internal classification type
+### 21.1 Internal classification type
 
 ```ts
 type OracleOutcome =
@@ -1357,35 +1361,35 @@ type OracleOutcome =
 
 This is a suggested design, not the final API. Every path must provide a reason code plus human-readable detail.
 
-## 21.2 Profile examples
+### 21.2 Profile examples
 
-### Functional profile
+#### Functional profile
 
 - Test passes: good.
 - Reproducible assertion/behavior failure: bad.
 - Build or setup issue that prevents executing the behavior test: skip or abort according to configured policy.
 - Missing command, invalid config, unsupported environment: preflight failure or abort, never bad by accident.
 
-### Build profile
+#### Build profile
 
 - Build succeeds: good.
 - Reproducible source build failure: bad.
 - Tooling/infrastructure failure, missing compiler or unavailable dependency service: skip/abort according to profile.
 
-### Performance profile (later)
+#### Performance profile (later)
 
 - Run a benchmark with documented warm-up, repeat count and threshold.
 - Store all measurements, host/runtime metadata and the threshold used.
 - Classify only when the chosen robust statistic crosses a configured, statistically defensible threshold.
 - Mark noisy/inconsistent results inconclusive.
 
-### Security-test profile (later)
+#### Security-test profile (later)
 
 - Use a deterministic scanner/test rule as the oracle.
 - Clearly identify what rule fired and its scanner version.
 - Do not claim a clean scan proves that a project is secure.
 
-## 21.3 Mandatory runner behavior
+### 21.3 Mandatory runner behavior
 
 Before search begins, verify all configured executables exist and are executable. A command-not-found result commonly maps to exit status 127; Git treats ordinary statuses 1–127 except 125 as bad. Therefore, letting a missing test executable escape unhandled can falsely accuse the selected commit. Convert setup failures to preflight error or a well-reasoned abort/skip result.
 
@@ -1393,13 +1397,13 @@ Do not infer classification solely from text like “FAILED” in stdout. The ru
 
 ---
 
-# 22. Detailed implementation plan: engineering tasks and exit gates
+## 22. Detailed implementation plan: engineering tasks and exit gates
 
 Do not ask the coding agent to implement everything in one huge generation pass. Require a working testable artifact at every milestone.
 
-## Milestone A — Design lock and scaffold
+### Milestone A — Design lock and scaffold
 
-**Tasks**
+#### Tasks
 
 1. Inspect the repository and the current branch before changing anything.
 2. Confirm the permitted AI tooling under the event rules.
@@ -1411,9 +1415,9 @@ Do not ask the coding agent to implement everything in one huge generation pass.
 
 **Exit gate:** `npm test` and `npm run typecheck` work on a clean checkout; the fixture generator creates the expected history and tests prove the designated regression commit.
 
-## Milestone B — Git inspection adapter
+### Milestone B — Git inspection adapter
 
-**Tasks**
+#### Tasks
 
 1. Implement a Git process adapter that accepts an executable and argument array.
 2. Validate that the current path belongs to a Git repository.
@@ -1425,9 +1429,9 @@ Do not ask the coding agent to implement everything in one huge generation pass.
 
 **Exit gate:** unit tests cover valid/invalid paths and refs; integration tests prove endpoint resolution against real repositories. All commands use explicit argument arrays.
 
-## Milestone C — Worktree lifecycle
+### Milestone C — Worktree lifecycle
 
-**Tasks**
+#### Tasks
 
 1. Define an application-owned data directory for session records, runner scripts and evidence.
 2. Generate a unique worktree path outside the source tree by default.
@@ -1440,9 +1444,9 @@ Do not ask the coding agent to implement everything in one huge generation pass.
 
 **Exit gate:** integration tests demonstrate that creating, checking out and removing a worktree does not switch the original `HEAD`, change the original tracked worktree state or delete preexisting unowned files.
 
-## Milestone D — Minimal deterministic bisect run
+### Milestone D — Minimal deterministic bisect run
 
-**Tasks**
+#### Tasks
 
 1. Keep the generated runner outside the historical checkout.
 2. Start native Git Bisect inside the tool-owned worktree, using validated endpoint SHAs.
@@ -1454,9 +1458,9 @@ Do not ask the coding agent to implement everything in one huge generation pass.
 
 **Exit gate:** one real end-to-end test detects the injected regression SHA; the test fails if a nearby commit is reported; original checkout remains unchanged.
 
-## Milestone E — Preflight and robust classification
+### Milestone E — Preflight and robust classification
 
-**Tasks**
+#### Tasks
 
 1. Add endpoint verification before searching.
 2. Add distinct setup/build/test phases.
@@ -1469,9 +1473,9 @@ Do not ask the coding agent to implement everything in one huge generation pass.
 
 **Exit gate:** tests cover endpoint mismatch, missing command, build failure, actual test failure, timeout, inconsistent outcomes, too many skipped commits and unexpected runner exit.
 
-## Milestone F — Session persistence and recovery
+### Milestone F — Session persistence and recovery
 
-**Tasks**
+#### Tasks
 
 1. Implement versioned session state.
 2. Implement append-only event ledger.
@@ -1482,9 +1486,9 @@ Do not ask the coding agent to implement everything in one huge generation pass.
 
 **Exit gate:** kill the parent process during a fixture run; a subsequent status command identifies the interrupted state; resume or cleanup behaves as documented without altering the main checkout.
 
-## Milestone G — Evidence reports
+### Milestone G — Evidence reports
 
-**Tasks**
+#### Tasks
 
 1. Produce a JSON report with a versioned schema.
 2. Produce a human-readable Markdown report.
@@ -1495,9 +1499,9 @@ Do not ask the coding agent to implement everything in one huge generation pass.
 
 **Exit gate:** snapshot tests validate report schema/content; a sample report is independently understandable without running the tool; redaction tests cover common token patterns and user-configured sensitive fields.
 
-## Milestone H — First release quality
+### Milestone H — First release quality
 
-**Tasks**
+#### Tasks
 
 1. Finish command help and exit codes.
 2. Add clear prerequisites and supported-platform notes.
@@ -1512,11 +1516,11 @@ Do not ask the coding agent to implement everything in one huge generation pass.
 
 ---
 
-# 23. Metrics: prove the tool provides value
+## 23. Metrics: prove the tool provides value
 
 Use a small, documented evaluation set instead of relying on one successful demo.
 
-## 23.1 Correctness metrics
+### 23.1 Correctness metrics
 
 - **Exact candidate accuracy:** how often the found boundary matches the known injected regression in fixtures.
 - **Ambiguity correctness:** how often the tool correctly returns a candidate range/inconclusive result when skips or inconsistent outcomes prevent one precise SHA.
@@ -1525,7 +1529,7 @@ Use a small, documented evaluation set instead of relying on one successful demo
 - **Recovery success:** proportion of injected process interruptions from which the tool correctly identifies state and offers safe resume/cleanup.
 - **False bad rate:** how often environment/setup faults are incorrectly classified as a bad source revision. Target zero on deterministic injected tests.
 
-## 23.2 Efficiency metrics
+### 23.2 Efficiency metrics
 
 - Number of historical revisions tested compared with a sequential scan on the same fixture.
 - Total elapsed time including setup, not only bisection steps.
@@ -1535,7 +1539,7 @@ Use a small, documented evaluation set instead of relying on one successful demo
 
 Do not claim an expected speedup without measurements. Binary search has logarithmic behavior under useful assumptions, but builds and tests often dominate runtime.
 
-## 23.3 Usability metrics
+### 23.3 Usability metrics
 
 - Can a developer unfamiliar with Git Bisect complete a guided run?
 - Do users understand why the endpoints were accepted/rejected?
@@ -1543,17 +1547,17 @@ Do not claim an expected speedup without measurements. Binary search has logarit
 - Are error messages actionable without reading the source code?
 - Can a user safely resume or abandon a run?
 
-## 23.4 Evaluation fixtures
+### 23.4 Evaluation fixtures
 
 Start with synthetic repositories, then add a small curated set of public repositories and real historical regressions only where there is a clear deterministic test oracle and the project’s license permits the use. Document how each regression ground truth was established. Keep synthetic fixture results separate from real-project results in any public claims.
 
 ---
 
-# 24. Research bibliography and annotated source list
+## 24. Research bibliography and annotated source list
 
 The following sources were reviewed for design decisions. Publisher pages do not always expose the full paper, so the notes distinguish official docs, accessible full text and abstract-level evidence. They are not a claim that all possible literature has been exhausted.
 
-## 24.1 Primary implementation documentation
+### 24.1 Primary implementation documentation
 
 1. **Git `git-bisect` manual.** Official semantics for `git bisect run`, skip exit code 125, abort conditions, path specifications, first-parent behavior, run logs and examples. <https://git-scm.com/docs/git-bisect/>
 2. **Git `git-worktree` manual.** Linked working trees, detached checkouts, worktree listing, cleanup, repair and worktree lifecycle. <https://git-scm.com/docs/git-worktree.html>
@@ -1564,40 +1568,40 @@ The following sources were reviewed for design decisions. Publisher pages do not
 7. **OWASP Secrets Management Cheat Sheet.** Secret lifecycle and risks related to logs, environment exposure and credential management. <https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html>
 8. **npm trusted publishing.** OIDC-based publishing and reducing reliance on long-lived npm tokens for a future public release. <https://docs.npmjs.com/trusted-publishers/>
 
-## 24.2 Existing tool documentation examined
+### 24.2 Existing tool documentation examined
 
-9. **Chromium `bisect-builds.py`.** Automated bisection across archived builds and explicit verification of good/bad endpoints. <https://www.chromium.org/developers/bisect-builds-py/>
-10. **Mozilla `mozregression` docs.** Automated regression search using test commands and build-specific context. <https://mozilla.github.io/mozregression/documentation/>
-11. **Mozilla automatic bisection.** Command-driven evaluation of candidate builds. <https://mozilla.github.io/mozregression/documentation/automatic-bisection.html>
-12. **Bisect.sh docs.** Existing local CLI and GitHub App issue-driven regression workflow; useful for competitive positioning. <https://bisect.sh/docs>
+1. **Chromium `bisect-builds.py`.** Automated bisection across archived builds and explicit verification of good/bad endpoints. <https://www.chromium.org/developers/bisect-builds-py/>
+2. **Mozilla `mozregression` docs.** Automated regression search using test commands and build-specific context. <https://mozilla.github.io/mozregression/documentation/>
+3. **Mozilla automatic bisection.** Command-driven evaluation of candidate builds. <https://mozilla.github.io/mozregression/documentation/automatic-bisection.html>
+4. **Bisect.sh docs.** Existing local CLI and GitHub App issue-driven regression workflow; useful for competitive positioning. <https://bisect.sh/docs>
 
-## 24.3 Academic research consulted
+### 24.3 Academic research consulted
 
-13. **Zeller & Hildebrandt, “Simplifying and Isolating Failure-Inducing Input,” IEEE Transactions on Software Engineering (2002).** Delta debugging reduces a failing input to a smaller reproducer; supports a later minimization feature distinct from commit bisection. <https://www.st.cs.uni-saarland.de/papers/tse2002/>
-14. **Zeller, “Yesterday, my program worked. Today, it does not. Why?” (1999).** Foundational delta-debugging paper on identifying failure-inducing changes. <https://dl.acm.org/doi/10.1145/318774.318946>
-15. **“Hunting bugs: Towards an automated approach to identifying which change caused a bug through regression testing,” Empirical Software Engineering (2024).** Examines using regression tests as a basis for finding bug-introducing changes, including whether tests can build/run on historical snapshots. <https://link.springer.com/article/10.1007/s10664-024-10479-z>
-16. **Rasheed et al., “Test Flakiness’ Causes, Detection, Impact and Responses: A Multivocal Review,” Journal of Systems and Software (2023).** Reviews academic and practitioner work on flaky-test causes, detection and response. <https://doi.org/10.1016/j.jss.2023.111837>
-17. **CANNIER, “Empirically evaluating flaky test detection techniques combining test case rerunning and machine learning models,” Empirical Software Engineering.** Evaluates rerun-based detection and the cost of repeated execution on 89,668 tests from 30 Python projects; supports bounded retries rather than unbounded reruns. <https://link.springer.com/article/10.1007/s10664-023-10307-w>
-18. **“Change impact analysis: A systematic mapping study,” Journal of Systems and Software (2021).** Surveys change-impact-analysis literature; supports postponing dependency-aware test selection until the baseline oracle path is reliable. <https://www.sciencedirect.com/science/article/pii/S016412122030282X>
-19. **Engström, Runeson & Skoglund, “A systematic review on regression test selection techniques,” Information and Software Technology (2010).** Reviews 27 papers, 36 empirical studies and 28 techniques; reports varied evidence rather than a universally best selection technique. <https://doi.org/10.1016/j.infsof.2009.07.001>
-20. **“On Refining the SZZ Algorithm with Bug Discussion Data,” Empirical Software Engineering (2024).** Discusses tangled and ghost commits and evaluates ways to augment SZZ using issue discussion data. <https://link.springer.com/article/10.1007/s10664-024-10511-2>
-21. **“A Framework for Evaluating the Results of the SZZ Approach for Identifying Bug-Introducing Changes,” IEEE Transactions on Software Engineering (2017).** Examines evaluation challenges and known limitations of SZZ results. <https://ieeexplore.ieee.org/abstract/document/7588121>
-22. **“SZZ Unleashed: an open implementation of the SZZ algorithm” (2019).** Useful reference for heuristic bug-introducing-commit analysis; not a replacement for deterministic test evidence. <https://dl.acm.org/doi/10.1145/3340482.3342742>
-23. **Wu et al., “Large Language Models in Fault Localisation” (2023).** Evaluates LLM fault localization on Defects4J and notes strong sensitivity to context scope and test logs. <https://arxiv.org/abs/2308.15276>
-24. **“Can LLM Generate Regression Tests for Software Commits?” (2025).** Evaluates an approach to LLM-assisted regression-test generation on a small subject set, providing possible future research but not justification for an AI-dependent core. <https://arxiv.org/html/2501.11086v1>
-25. **“Integrating Various Software Artifacts for Better LLM-based Bug Localization and Program Repair” (2024/2025).** Studies how issue content, stack traces and debugging artifacts complement one another for localization. <https://arxiv.org/html/2412.03905v2>
-26. **Jones & Harrold, “Empirical evaluation of the Tarantula automatic fault-localization technique,” ASE (2005).** A foundational spectrum-based fault-localization technique; a possible later code-location ranking aid, not a replacement for bisect. <https://doi.org/10.1145/1101908.1101949>
-27. **“On the Effectiveness of Bisection in Performance Regression Detection” (2022).** Directly relevant literature for the later performance-regression profile; read in full before making performance-mode design claims. <https://dl.acm.org/doi/abs/10.1007/s10664-022-10152-3>
-28. **“Selective Bisection Debugging,” FASE (2017).** A research direction for improving how debugging candidates are selected; useful background if the project later investigates beyond the straightforward native Git algorithm. <https://link.springer.com/book/10.1007/978-3-662-54494-5>
+1. **Zeller & Hildebrandt, “Simplifying and Isolating Failure-Inducing Input,” IEEE Transactions on Software Engineering (2002).** Delta debugging reduces a failing input to a smaller reproducer; supports a later minimization feature distinct from commit bisection. <https://www.st.cs.uni-saarland.de/papers/tse2002/>
+2. **Zeller, “Yesterday, my program worked. Today, it does not. Why?” (1999).** Foundational delta-debugging paper on identifying failure-inducing changes. <https://dl.acm.org/doi/10.1145/318774.318946>
+3. **“Hunting bugs: Towards an automated approach to identifying which change caused a bug through regression testing,” Empirical Software Engineering (2024).** Examines using regression tests as a basis for finding bug-introducing changes, including whether tests can build/run on historical snapshots. <https://link.springer.com/article/10.1007/s10664-024-10479-z>
+4. **Rasheed et al., “Test Flakiness’ Causes, Detection, Impact and Responses: A Multivocal Review,” Journal of Systems and Software (2023).** Reviews academic and practitioner work on flaky-test causes, detection and response. <https://doi.org/10.1016/j.jss.2023.111837>
+5. **CANNIER, “Empirically evaluating flaky test detection techniques combining test case rerunning and machine learning models,” Empirical Software Engineering.** Evaluates rerun-based detection and the cost of repeated execution on 89,668 tests from 30 Python projects; supports bounded retries rather than unbounded reruns. <https://link.springer.com/article/10.1007/s10664-023-10307-w>
+6. **“Change impact analysis: A systematic mapping study,” Journal of Systems and Software (2021).** Surveys change-impact-analysis literature; supports postponing dependency-aware test selection until the baseline oracle path is reliable. <https://www.sciencedirect.com/science/article/pii/S016412122030282X>
+7. **Engström, Runeson & Skoglund, “A systematic review on regression test selection techniques,” Information and Software Technology (2010).** Reviews 27 papers, 36 empirical studies and 28 techniques; reports varied evidence rather than a universally best selection technique. <https://doi.org/10.1016/j.infsof.2009.07.001>
+8. **“On Refining the SZZ Algorithm with Bug Discussion Data,” Empirical Software Engineering (2024).** Discusses tangled and ghost commits and evaluates ways to augment SZZ using issue discussion data. <https://link.springer.com/article/10.1007/s10664-024-10511-2>
+9. **“A Framework for Evaluating the Results of the SZZ Approach for Identifying Bug-Introducing Changes,” IEEE Transactions on Software Engineering (2017).** Examines evaluation challenges and known limitations of SZZ results. <https://ieeexplore.ieee.org/abstract/document/7588121>
+10. **“SZZ Unleashed: an open implementation of the SZZ algorithm” (2019).** Useful reference for heuristic bug-introducing-commit analysis; not a replacement for deterministic test evidence. <https://dl.acm.org/doi/10.1145/3340482.3342742>
+11. **Wu et al., “Large Language Models in Fault Localisation” (2023).** Evaluates LLM fault localization on Defects4J and notes strong sensitivity to context scope and test logs. <https://arxiv.org/abs/2308.15276>
+12. **“Can LLM Generate Regression Tests for Software Commits?” (2025).** Evaluates an approach to LLM-assisted regression-test generation on a small subject set, providing possible future research but not justification for an AI-dependent core. <https://arxiv.org/html/2501.11086v1>
+13. **“Integrating Various Software Artifacts for Better LLM-based Bug Localization and Program Repair” (2024/2025).** Studies how issue content, stack traces and debugging artifacts complement one another for localization. <https://arxiv.org/html/2412.03905v2>
+14. **Jones & Harrold, “Empirical evaluation of the Tarantula automatic fault-localization technique,” ASE (2005).** A foundational spectrum-based fault-localization technique; a possible later code-location ranking aid, not a replacement for bisect. <https://doi.org/10.1145/1101908.1101949>
+15. **“On the Effectiveness of Bisection in Performance Regression Detection” (2022).** Directly relevant literature for the later performance-regression profile; read in full before making performance-mode design claims. <https://dl.acm.org/doi/abs/10.1007/s10664-022-10152-3>
+16. **“Selective Bisection Debugging,” FASE (2017).** A research direction for improving how debugging candidates are selected; useful background if the project later investigates beyond the straightforward native Git algorithm. <https://link.springer.com/book/10.1007/978-3-662-54494-5>
 
 ---
 
-# 25. Final decision log
+## 25. Final decision log
 
 Use these choices as defaults unless implementation evidence changes them:
 
 | Decision | Recommendation | Why |
-|---|---|---|
+| --- | --- | --- |
 | Core architecture | Modular monolith | Small scope, clear boundaries, easy debugging and distribution |
 | Interface | CLI first | Fits the developer workflow and minimizes infrastructure |
 | Search | Native Git Bisect | Use a proven existing algorithm |
@@ -1615,25 +1619,24 @@ Use these choices as defaults unless implementation evidence changes them:
 | Flaky oracles (v3) | Endpoint flake check in P0; Bayesian noisy mode in P1 | Plain bisection is unreliable when the oracle is noisy |
 | Team structure (v3) | Two agents, frozen contract, file ownership, three gates | Parallel work without conflicting edits |
 
-## What success looks like
+### What success looks like
 
 A new user can install the tool, run `doctor`, configure a deterministic test, verify good and bad endpoints, launch an investigation in a disposable worktree, interrupt and resume it safely, inspect every classification, and generate a report with the candidate commit and supporting evidence. The tool is explicit when it cannot reach a reliable conclusion. It never modifies the user's original checkout as part of normal operation, and it does not require an AI API or network connection to perform its core job.
 
 That is the foundation to build before adding the optional advanced ideas.
 
-
 ---
 
-# 26. v3 design improvements (research update, 19 October 2026)
+## 26. v3 design improvements (research update, 19 October 2026)
 
-## 26.1 Oracle overlay: the test usually does not exist in old commits
+### 26.1 Oracle overlay: the test usually does not exist in old commits
 
 **Problem.** A developer typically discovers a bug, then writes a test that reproduces it. That test lives in the working tree or a new commit. Every historical revision Git checks out will *not* contain it, so "run `npm test`" at old revisions tests the wrong thing or nothing at all. The 2024 "Hunting bugs" paper calls this transplantability; v2 noted the risk but did not design for it.
 
 **Design.** The config gets an `oracle` block with one of three modes:
 
 | Mode | How it works | Use when |
-|---|---|---|
+| --- | --- | --- |
 | `in-tree` | Runs a command that already exists at every revision | Build regressions; an old test started failing |
 | `overlay` | Copies listed files (from the session directory, snapshotted at `start`) into the worktree before the test, then removes them after | A new test file must run against old code |
 | `external` | Runs a script stored in the session directory with `cwd` = worktree; nothing is written into the tree | Black-box checks (CLI output, HTTP call, benchmark) |
@@ -1645,7 +1648,7 @@ Rules for `overlay`:
 3. After the test, remove overlay files even if the test crashed. Leftover untracked files can make Git refuse the next checkout.
 4. Record the overlay hashes in every ledger event and in the report, so a reader knows exactly which test was used.
 
-## 26.2 Git facts the implementation must rely on (verified)
+### 26.2 Git facts the implementation must rely on (verified)
 
 - **Minimum Git 2.36.** From 2.36, `git bisect run` double-checks exit codes 126/127 against the known-good revision and aborts, so a typo can no longer silently "find" a wrong commit. `doctor` fails below 2.36 and explains why. BisectPilot still never emits 126/127 itself (Section 6.3).
 - **Bisect state is per-worktree.** Refs under `refs/bisect/` are not shared between worktrees. A session in its own worktree does not disturb a bisect the user is running in the main checkout. Still, `doctor` should report an active bisect in the main checkout so the user is not confused.
@@ -1653,7 +1656,7 @@ Rules for `overlay`:
 - **`safe.directory`.** Since the 2022 CVE-2022-24765 fixes, Git refuses repositories owned by another user. `doctor` must detect this and print the exact `git config --global --add safe.directory <path>` command for the user to run. BisectPilot never runs it automatically.
 - **Other `doctor` checks:** shallow clone (`git rev-parse --is-shallow-repository`) when endpoints may be missing; Git LFS pointer files; submodules (offer `submoduleUpdate: true`, off by default); sparse checkout.
 
-## 26.3 Reset the tool-owned worktree after every revision
+### 26.3 Reset the tool-owned worktree after every revision
 
 `npm ci`, builds and tests often rewrite tracked files (lockfiles, generated code, snapshots). Git then refuses to check out the next revision and the whole run fails half way.
 
@@ -1665,7 +1668,7 @@ After each revision, inside the **tool-owned worktree only**:
 
 Before running any reset, re-verify that the path is the session's registered worktree (path + `git rev-parse --git-common-dir` match the manifest). This is the one place destructive Git commands are allowed, and it must be guarded in a single function with its own tests.
 
-## 26.4 Flaky oracles: measure first, then decide
+### 26.4 Flaky oracles: measure first, then decide
 
 v2 used bounded retries. Research shows a better order:
 
@@ -1675,7 +1678,7 @@ v2 used bounded retries. Research shows a better order:
 
 Third-party benchmark claims about Bayesian bisection accuracy (e.g. in the git_bayesect discussion) should not be repeated in BisectPilot docs until reproduced on our own fixtures.
 
-## 26.5 Process-tree termination
+### 26.5 Process-tree termination
 
 Timeouts are useless if `npm test` exits but its child (a dev server, a browser) keeps running.
 
@@ -1684,10 +1687,10 @@ Timeouts are useless if `npm test` exits but its child (a dev server, a browser)
 - Record `terminatedBy: "timeout" | "cancel"` and which signal ended it. A timed-out revision is `skip` (reason `timeout`), never `bad`.
 - Start the runner with `process.execPath` (absolute Node path) so a revision that changes `PATH` or `.nvmrc` cannot change which Node runs the runner.
 
-## 26.6 Updated competitive position
+### 26.6 Updated competitive position
 
 | Tool | What it already does | What it means for BisectPilot |
-|---|---|---|
+| --- | --- | --- |
 | Native `git bisect run` | Search, skip, log/replay, custom terms | We orchestrate it; we do not replace it |
 | Chromium `bisect-builds.py` | Archived builds, `--verify-range` | Endpoint verification is expected, not novel |
 | Mozilla `mozregression` | Command-driven build bisection | Profiles/adapters pattern |
@@ -1698,21 +1701,21 @@ Timeouts are useless if `npm test` exits but its child (a dev server, a browser)
 
 **What remains genuinely different** (and what the README should lead with): (1) oracle overlay for tests that do not exist in history; (2) preflight that proves the oracle distinguishes the endpoints and is not flaky; (3) a tamper-evident evidence ledger and `repro.sh`; (4) crash-safe, resumable sessions; (5) honest outcome taxonomy; (6) Node.js-first ergonomics (lockfile/toolchain awareness).
 
-## 26.7 Evidence you can trust and replay
+### 26.7 Evidence you can trust and replay
 
 - **Hash-chained ledger.** Each JSONL event stores `prevHash` = SHA-256 of the previous line, plus SHA-256 of each stdout/stderr file. `bisectpilot report --verify` recomputes the chain. This catches accidental edits and truncation; it is not a signature and must not be described as one.
 - **`repro.sh` / `repro.ps1`.** Generated next to the report: checks out the candidate and its parent in a fresh worktree, applies the overlay, runs the oracle, prints both results. A reviewer can reproduce the finding with one command.
 - **`bisect.log` export.** Save Git's own bisect log so `git bisect replay` works outside BisectPilot.
 
-## 26.8 Deterministic environment defaults
+### 26.8 Deterministic environment defaults
 
 Pass these to every oracle process unless the user overrides them: `CI=1`, `TZ=UTC`, `LANG=C.UTF-8`, `NO_COLOR=1`, `FORCE_COLOR=0`, `npm_config_audit=false`, `npm_config_fund=false`, `npm_config_update_notifier=false`. Record them in the report. They remove common sources of noise (time zones, locale-dependent sorting, colour codes in logs) without hiding real regressions.
 
-## 26.9 Per-revision toolchain awareness (Node.js first)
+### 26.9 Per-revision toolchain awareness (Node.js first)
 
 At each revision, read (never execute) `.nvmrc`, `.node-version`, `package.json#engines.node`, `package.json#packageManager` and the lockfile name/hash. Record them. If the required major Node version differs from the running one, classify `skip` with reason `toolchain_mismatch` and say which version was needed. P1: let the user supply a wrapper such as `fnm exec --using=<version>` to switch automatically.
 
-## 26.10 New P1 features from prior art
+### 26.10 New P1 features from prior art
 
 - **Good-endpoint discovery** (`--good auto`): test the bad endpoint, then step back through tags or exponentially larger distances (1, 2, 4, 8 … commits) until the oracle passes. Show the found endpoint and ask before using it.
 - **Manual classification** (`--prompt`): show output and ask the human good/bad/skip. Ledger records `classifiedBy: "human"`; the report labels these rows.
@@ -1720,9 +1723,9 @@ At each revision, read (never execute) `.nvmrc`, `.node-version`, `package.json#
 
 ---
 
-# 27. Unified session state machine (replaces 3.8 and 20)
+## 27. Unified session state machine (replaces 3.8 and 20)
 
-## 27.1 States
+### 27.1 States
 
 ```text
 created
@@ -1738,17 +1741,17 @@ From any non-terminal state: cancel_requested -> cancelled
 On crash: the next `status` finds a non-terminal state with no live PID -> needs_recovery
 ```
 
-## 27.2 Rules
+### 27.2 Rules
 
 - Every transition is one ledger event, written **before** the side effect it announces (e.g. `process_starting` is persisted before `spawn`).
 - One function, `transition(session, to)`, rejects illegal transitions. Unit-test the full transition table.
 - A lock file (`session.lock` containing PID + hostname + start time) prevents two processes driving one session. A stale lock (PID not alive on the same host) is reported, never silently stolen.
 - `resume` from `needs_recovery` re-verifies: worktree path and common git dir match the manifest; worktree HEAD is the last recorded revision or the bisect's current revision; config and overlay hashes unchanged. Any mismatch → stop and explain.
 
-## 27.3 Outcomes (set when entering `concluded`)
+### 27.3 Outcomes (set when entering `concluded`)
 
 | Outcome | Meaning |
-|---|---|
+| --- | --- |
 | `candidate_confirmed` | Git named one commit and boundary verification agreed |
 | `candidate_unconfirmed` | Git named one commit but boundary re-runs disagreed (likely flaky) |
 | `candidate_range` | Skips left several possible first-bad commits; list them |
@@ -1759,16 +1762,16 @@ Reports always print the outcome name first, in words a reader understands.
 
 ---
 
-# 28. Two-agent work plan
+## 28. Two-agent work plan
 
 The work splits along one seam: **Agent A builds the engine that runs the investigation. Agent B builds everything that proves it right and makes it usable** (fixtures, tests, CLI, config, reports, docs). B's fixtures double as A's acceptance tests, so the two agents check each other.
 
-## 28.1 Phase 0 — shared contract (both agents, ~1–2 hours, done before splitting)
+### 28.1 Phase 0 — shared contract (both agents, ~1–2 hours, done before splitting)
 
 Agent A drafts, Agent B reviews, both sign off. Put everything in `src/contracts/` and **freeze it**; changes after the freeze need a written note in `docs/decisions/` and both agents' agreement.
 
 | Contract file | Contents |
-|---|---|
+| --- | --- |
 | `config.ts` | Config type + zod schema (profile, prepare/build/test commands as `{command,args,timeoutMs}`, `oracle` mode + overlay paths, retries, flake `k`, skip budget, env allowlist) |
 | `outcome.ts` | `OracleOutcome` (good/bad/skip/abort + `reasonCode` enum + detail), `SessionOutcome` (Section 27.3), the exit-code mapping table |
 | `ledger.ts` | `LedgerEvent` union (session_created, transition, process_starting, process_exited, revision_classified, boundary_check, cleanup_step) with `schemaVersion`, `prevHash` |
@@ -1777,10 +1780,10 @@ Agent A drafts, Agent B reviews, both sign off. Put everything in `src/contracts
 
 Phase 0 also creates the repo scaffold (TypeScript strict, Vitest, `npm run typecheck`), `AGENTS.md`, and a `FakeEngine` that implements `engine.ts` by replaying a canned ledger. B uses the fake until A's real engine lands.
 
-## 28.2 File ownership (prevents merge conflicts)
+### 28.2 File ownership (prevents merge conflicts)
 
 | Path | Owner |
-|---|---|
+| --- | --- |
 | `src/contracts/**` | Frozen; both, change by agreement only |
 | `src/domain/**`, `src/adapters/git/**`, `src/adapters/process/**`, `src/adapters/storage/**`, `src/runner/**`, `src/application/**` | **Agent A** |
 | `src/cli/**`, `src/config/**`, `src/adapters/reports/**`, `src/redaction/**` | **Agent B** |
@@ -1790,10 +1793,10 @@ Phase 0 also creates the repo scaffold (TypeScript strict, Vitest, `npm run type
 
 Each agent works on its own branch (`agent-a/engine`, `agent-b/experience`) in its own git worktree, rebases on `main` at every gate, and never edits the other's files. A needed change in the other's area is filed as a short request in `docs/handoff.md`.
 
-## 28.3 Agent A — Engine (Git, runner, process, sessions)
+### 28.3 Agent A — Engine (Git, runner, process, sessions)
 
 | # | Task | Done when |
-|---|---|---|
+| --- | --- | --- |
 | A1 | Git adapter: version check (≥2.36), repo root, `--git-common-dir`, ref → full SHA, ancestry check good⊂bad, shallow/LFS/submodule/safe.directory detection, existing-bisect detection | Unit + integration tests on real temp repos |
 | A2 | Worktree manager: create detached tool-owned worktree, register in manifest, guarded `resetWorktree()` (26.3), guarded `removeWorktree()` | Test: original HEAD, index and an uncommitted file are unchanged after create/reset/remove; unowned path is refused |
 | A3 | Process runner: argv only, `shell:false`, env allowlist + deterministic defaults (26.8), timeout, output caps, process-group kill POSIX / taskkill Windows (26.5) | Tests: timeout → skip; grandchild process is dead after timeout; 2 MB output is capped |
@@ -1805,10 +1808,10 @@ Each agent works on its own branch (`agent-a/engine`, `agent-b/experience`) in i
 | A9 | Bisect controller: `git bisect start/run/log/reset` in the worktree, parse result via bisect refs + log (not one stdout line), skip budget, boundary verification | **Gate 1 fixture finds the exact injected SHA** |
 | A10 | Cancel/crash/resume/cleanup (27.2) | Fixture `interrupted-run`: kill parent mid-run → `status` shows `needs_recovery` → `resume` finishes or `cleanup` leaves no tool-owned worktree |
 
-## 28.4 Agent B — Experience & verification (fixtures, CLI, reports, docs)
+### 28.4 Agent B — Experience & verification (fixtures, CLI, reports, docs)
 
 | # | Task | Done when |
-|---|---|---|
+| --- | --- | --- |
 | B1 | Fixture generator: builds temp repos from a small spec and returns the expected first-bad SHA | Fixtures: `linear-regression` (A…J, bad at D), `build-break`, `untestable-range` (skip), `flaky-endpoint`, `contradicting-endpoints`, `missing-command`, `timeout`, `dirty-original`, `mutates-lockfile`, `test-not-in-history` (needs overlay), `merge-history`, `interrupted-run` |
 | B2 | Config: schema-driven loader, clear error messages with the failing field path, `init` wizard that writes a config but never runs project scripts | Snapshot tests of error messages |
 | B3 | CLI commands against `FakeEngine`: `doctor`, `init`, `plan`, `start` (consent prompt, `--yes` for non-interactive), `status`, `resume`, `report`, `cleanup`, `list`; Ctrl+C → `cancel_requested` | CLI exit codes documented and tested; works with no TTY |
@@ -1819,10 +1822,10 @@ Each agent works on its own branch (`agent-a/engine`, `agent-b/experience`) in i
 | B8 | Docs: README (problem, quick start, 3-minute offline demo), `safety-model.md` (worktree ≠ sandbox), limitations, troubleshooting by reason code | A new developer follows README on a clean clone successfully |
 | B9 | CI: Linux + macOS (+ Windows when A3 Windows path is done), Git 2.36 and latest, Node LTS; actions pinned by SHA, minimal permissions | Green matrix |
 
-## 28.5 Gates (where the two branches meet)
+### 28.5 Gates (where the two branches meet)
 
 | Gate | Requires | Proves |
-|---|---|---|
+| --- | --- | --- |
 | **G0** | Phase 0 contract frozen, scaffold + FakeEngine green | Both agents can work in parallel |
 | **G1** | A1–A6 + A9 minimal; B1 `linear-regression` fixture | Real `git bisect run` through the external runner finds the exact injected SHA; original checkout untouched |
 | **G2** | A7–A10; B2–B5, B7 | Every fixture gives its expected outcome end to end; timeout/missing command never yields `bad` |
@@ -1830,10 +1833,10 @@ Each agent works on its own branch (`agent-a/engine`, `agent-b/experience`) in i
 
 Nobody starts work that depends on the next gate until the current gate is green. If G1 slips, B keeps adding fixtures and CLI polish against the fake; A does not start sessions/recovery until G1 passes.
 
-## 28.6 Hackathon (one-day) version of the split
+### 28.6 Hackathon (one-day) version of the split
 
 | Hours | Agent A | Agent B |
-|---|---|---|
+| --- | --- | --- |
 | 0–1 | Phase 0 together: contracts, scaffold, FakeEngine | (same) |
 | 1–4 | A1, A2, A3 (POSIX only), A5, A6 | B1 (`linear-regression`, `build-break`, `missing-command`, `timeout`), B3 `start` + `report` on the fake |
 | 4–6 | A9 → **G1** | B5 markdown report, B6 `repro.sh` |
@@ -1844,27 +1847,27 @@ Skipped for the one-day version: overlay mode, resume, Windows, noisy mode, reda
 
 ---
 
-# 29. Copy-paste briefs for the two agents
+## 29. Copy-paste briefs for the two agents
 
 Give each agent the whole blueprint plus its brief.
 
-## 29.1 Agent A brief
+### 29.1 Agent A brief
 
 > You are Agent A, owner of the BisectPilot engine. Read Sections 0, 6, 8, 26, 27 and 28 of the blueprint. Implement tasks A1–A10 in order, one vertical slice at a time. Only edit files Agent A owns (28.2); `src/contracts/` is frozen. Use real temporary Git repositories in integration tests, never mocks of Git. Never run destructive Git commands outside the registered session worktree; the only reset/clean code lives in one guarded function. Never let a timeout, missing executable or internal error map to `bad`. After each task, run the focused tests and `npm run typecheck`, and report exactly what passed. Stop at each gate (G1, G2) and wait for Agent B's fixtures to pass against your engine before continuing. Write cross-agent requests in `docs/handoff.md`.
 
-## 29.2 Agent B brief
+### 29.2 Agent B brief
 
 > You are Agent B, owner of BisectPilot's fixtures, CLI, config, reports, redaction, docs and CI. Read Sections 0, 4, 7, 9, 26, 27 and 28. Start with B1: fixtures are the acceptance tests for Agent A, so each must return its expected SHA or outcome. Build the CLI against `FakeEngine` until Agent A reaches G1, then switch the e2e suite to the real engine. Only edit files Agent B owns (28.2); `src/contracts/` is frozen. Reports may only contain what is in the ledger; never invent causality or confidence numbers (the only probability shown is the noisy-mode posterior, P1). Redact before anything is written to a report. After each task, run tests and typecheck and report exactly what passed. Write cross-agent requests in `docs/handoff.md`.
 
 ---
 
-# 30. Sources added in v3
+## 30. Sources added in v3
 
-29. **Henderson, Dorward, Nickell, Johnston, Kondareddy, "Flake Aware Culprit Finding," ICST 2023 Industry Track (Google).** Bayesian noisy binary search for culprit finding with flaky tests; study on 13,000+ breakages. <https://research.google/pubs/flake-aware-culprit-finding/> · full text: <https://hackthology.com/flake-aware-culprit-finding.html>
-30. **Johnston & Nickell, "Flake-Aware Culprit Finding," CI/CD Industry Workshop 2021.** Earlier version; argues retries make plain bisection expensive. <https://research.google/pubs/flake-aware-culprit-finding-2/>
-31. **git_bayesect (hauntsaninja).** Bayesian git bisection for changes in failure likelihood; priors from filenames/text. <https://github.com/hauntsaninja/git_bayesect>
-32. **FlareBisect (PyPI).** Flake-rate bisection, worktree per candidate, optional AI explanation. <https://pypi.org/project/flarebisect/>
-33. **cargo-bisect-rustc book.** Automatic boundary search, `--prompt`, custom terms, non-monotonic warning. <https://rust-lang.github.io/cargo-bisect-rustc/> (see "boundaries" and "usage" pages)
-34. **Git 2.36 release notes / bisect patch by René Scharfe.** `bisect run` double-checks 126/127 on the known-good revision. Patch discussion: <https://lore.kernel.org/git/> (thread "bisect--helper: double-check run command on exit code 126 and 127", January 2022)
-35. **git-worktree manual, "Refs" section.** `refs/bisect`, `refs/worktree`, `refs/rewritten` are per-worktree. <https://git-scm.com/docs/git-worktree#_refs>
-36. **Process-group termination in Node.js.** `detached: true` + `process.kill(-pid)` on POSIX; `taskkill /T /F` on Windows (pattern used by Puppeteer's browser launcher). <https://nodejs.org/api/child_process.html#optionsdetached>
+1. **Henderson, Dorward, Nickell, Johnston, Kondareddy, "Flake Aware Culprit Finding," ICST 2023 Industry Track (Google).** Bayesian noisy binary search for culprit finding with flaky tests; study on 13,000+ breakages. <https://research.google/pubs/flake-aware-culprit-finding/> · full text: <https://hackthology.com/flake-aware-culprit-finding.html>
+2. **Johnston & Nickell, "Flake-Aware Culprit Finding," CI/CD Industry Workshop 2021.** Earlier version; argues retries make plain bisection expensive. <https://research.google/pubs/flake-aware-culprit-finding-2/>
+3. **git_bayesect (hauntsaninja).** Bayesian git bisection for changes in failure likelihood; priors from filenames/text. <https://github.com/hauntsaninja/git_bayesect>
+4. **FlareBisect (PyPI).** Flake-rate bisection, worktree per candidate, optional AI explanation. <https://pypi.org/project/flarebisect/>
+5. **cargo-bisect-rustc book.** Automatic boundary search, `--prompt`, custom terms, non-monotonic warning. <https://rust-lang.github.io/cargo-bisect-rustc/> (see "boundaries" and "usage" pages)
+6. **Git 2.36 release notes / bisect patch by René Scharfe.** `bisect run` double-checks 126/127 on the known-good revision. Patch discussion: <https://lore.kernel.org/git/> (thread "bisect--helper: double-check run command on exit code 126 and 127", January 2022)
+7. **git-worktree manual, "Refs" section.** `refs/bisect`, `refs/worktree`, `refs/rewritten` are per-worktree. <https://git-scm.com/docs/git-worktree#_refs>
+8. **Process-group termination in Node.js.** `detached: true` + `process.kill(-pid)` on POSIX; `taskkill /T /F` on Windows (pattern used by Puppeteer's browser launcher). <https://nodejs.org/api/child_process.html#optionsdetached>

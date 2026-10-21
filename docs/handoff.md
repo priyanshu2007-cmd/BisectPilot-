@@ -110,6 +110,7 @@
    claiming production multi-host coverage.
 
 ## P2 — Deferred Post-Release Items
+
 - P2.1: Optional OpenTelemetry Collector OTLP exporter bridge.
 - P2.2: Website Explorer workspace-scope display indicator.
 - P2.3: Deeper native Windows process-tree (`taskkill.exe`) and daemon restart verification.

@@ -14,6 +14,7 @@ import {
 import { LocalBisectEngine } from "../../src/application/index.js";
 import { runCli } from "../../src/cli/index.js";
 import { readLedgerEvents } from "../../src/ledger/index.js";
+import type { SessionCreatedEvent } from "../../src/contracts/ledger.js";
 
 test("Feature A — Custom Bisect Terms: Validation and parsing", async (t) => {
   await t.test("accepts valid custom terms", () => {
@@ -192,7 +193,7 @@ test("Feature A — Custom Bisect Terms: Real Git repository bisection", async (
 
     // Verify session ledger records custom terms in session_created
     const events = readLedgerEvents(manifest.ledgerPath);
-    const createdEvent = events.find((e) => e.type === "session_created");
+    const createdEvent = events.find((e): e is SessionCreatedEvent => e.type === "session_created");
     assert.ok(createdEvent);
     assert.deepEqual(createdEvent.terms, { old: "fast", new: "slow" });
 

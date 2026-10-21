@@ -6,7 +6,7 @@ This runbook specifies the configuration, deployment, certificate architecture, 
 
 ## 1. Physical Architecture & Network Topology
 
-```
+```text
 +-------------------------------------------------------------+
 | Machine A: Daemon Coordinator                               |
 | IP: 192.168.1.100 (Subnet: 192.168.1.0/24)                  |
@@ -44,6 +44,7 @@ This runbook specifies the configuration, deployment, certificate architecture, 
 Generate a dedicated Public Key Infrastructure (PKI) for this deployment. Never reuse development keys or expose keys to public repositories.
 
 ### Step 2.1 — Certificate Authority (CA)
+
 ```bash
 # Generate private CA key
 openssl genrsa -out ca.key 4096
@@ -55,8 +56,10 @@ openssl req -x509 -new -nodes -key ca.key -sha256 -days 365 \
 ```
 
 ### Step 2.2 — Daemon Server Certificate (with SAN)
+
 The daemon certificate MUST include Subject Alternative Names (SAN) matching Machine A's DNS hostname and IP address.
 Create `daemon-san.ext`:
+
 ```ini
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
@@ -70,6 +73,7 @@ IP.1 = 192.168.1.100
 ```
 
 Generate daemon key and CSR:
+
 ```bash
 openssl genrsa -out daemon.key 2048
 chmod 0600 daemon.key
@@ -83,8 +87,10 @@ openssl x509 -req -in daemon.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 ```
 
 ### Step 2.3 — Worker Client Certificate (CN matching Worker ID)
+
 The worker certificate MUST have its Common Name (CN) set to the exact `workerId` configured on the worker.
 Create `worker-ext.ext`:
+
 ```ini
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
@@ -93,6 +99,7 @@ extendedKeyUsage = clientAuth
 ```
 
 Generate worker key and CSR:
+
 ```bash
 openssl genrsa -out worker-1.key 2048
 chmod 0600 worker-1.key
@@ -110,16 +117,22 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 ## 3. Deployment Runbook
 
 ### Step 3.1 — Setup on Machine A (Daemon Host)
+
 1. Install BisectPilot package or build locally:
+
    ```bash
    npm run build
    ```
+
 2. Initialize daemon state directory:
+
    ```bash
    mkdir -p /var/run/bisectpilot-daemon
    chmod 0700 /var/run/bisectpilot-daemon
    ```
+
 3. Start the Daemon with mTLS enforcement:
+
    ```bash
    node dist/src/index.js daemon start \
      --state-dir /var/run/bisectpilot-daemon \
@@ -130,7 +143,9 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
      --tls-ca /path/to/ca.crt \
      --require-client-cert
    ```
+
 4. Verify daemon health:
+
    ```bash
    curl --cacert /path/to/ca.crt \
         --cert /path/to/daemon.crt \
@@ -138,21 +153,29 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
         https://192.168.1.100:8443/api/v1/health
    # Expected response: {"ok":true}
    ```
+
 5. Securely transfer `ca.crt`, `worker-1.crt`, `worker-1.key`, and `/var/run/bisectpilot-daemon/daemon.token` to Machine B over SSH/SCP:
+
    ```bash
    scp ca.crt worker-1.crt worker-1.key /var/run/bisectpilot-daemon/daemon.token user@192.168.1.101:/etc/bisectpilot/
    ```
 
 ### Step 3.2 — Setup on Machine B (Worker Host)
+
 1. Ensure the target repository is pre-provisioned:
+
    ```bash
    git clone https://internal-git.company.com/repo.git /var/git/project
    ```
+
 2. Restrict permissions on credentials:
+
    ```bash
    chmod 0600 /etc/bisectpilot/worker-1.key /etc/bisectpilot/daemon.token
    ```
+
 3. Start the Remote Worker service:
+
    ```bash
    node dist/src/index.js worker start \
      --state-dir /var/run/bisectpilot-worker \
@@ -165,7 +188,9 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
      --worker-id worker-node-1 \
      --repo default=/var/git/project
    ```
+
 4. Verify registration on Machine A:
+
    ```bash
    # Status check on Machine A shows active registered worker:
    node dist/src/index.js daemon status --state-dir /var/run/bisectpilot-daemon
@@ -180,6 +205,7 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
    for the remote worker. The configuration must use an explicit `goodRef` and
    `badRef`; automatic good-endpoint discovery is intentionally not available
    for asynchronous jobs:
+
    ```bash
    bisectpilot daemon enqueue \
      --config bisectpilot.config.json \
@@ -187,6 +213,7 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
      --state-dir /var/run/bisectpilot-daemon \
      --yes
    ```
+
 2. **Scheduling**: The daemon coordinator queues the bisection job for the
    configured repository mapping. Native Git Bisect remains sequential inside
    one session; separate jobs may run on separate workers when their repository
@@ -205,31 +232,39 @@ openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 ## 5. Network Interruption & Resiliency Verification
 
 ### 5.1 Simulated Network Partition
+
 While Machine B is evaluating a revision, simulate an abrupt network partition on Machine A:
+
 ```bash
 # On Machine A: block traffic from Machine B
 sudo iptables -A INPUT -s 192.168.1.101 -j DROP
 ```
 
 **Verified Behavior**:
+
 1. Daemon detects missed heartbeats after 30 seconds (`leaseMs` expired).
 2. Daemon reclaims the job, increments attempt counter, and transitions job back to `queued` (or assigns to another worker).
 3. Restore network connectivity on Machine A:
+
    ```bash
    sudo iptables -D INPUT -s 192.168.1.101 -j DROP
    ```
+
 4. Machine B attempts to submit result from expired attempt 1.
 5. Daemon rejects with HTTP 409 Conflict: `Job lease identity mismatch` / `Expired lease`.
 6. Stale result is discarded; authoritative ledger remains untampered.
 
 ### 5.2 Negative Security Checks
+
 - **Untrusted Client Cert**: If a worker presents a certificate signed by an untrusted CA, TLS handshake is terminated immediately by daemon (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`).
 - **CN Mismatch / Identity Impersonation**: If a client with cert CN `worker-node-1` specifies `--worker-id worker-node-2`, daemon rejects with HTTP 403 `Client certificate CN does not match claimed workerId`.
 - **Certificate Revocation**: When daemon revokes a worker cert SHA-256 fingerprint:
+
   ```bash
   # Revocation on Machine A:
   # Subsequent requests return HTTP 403 "Client certificate has been revoked"
   ```
+
 - **Plain HTTP Rejection**: Non-loopback plain HTTP connections (`http://192.168.1.100:8443`) are rejected at the client layer (`Plain HTTP is allowed only for loopback daemon URLs`).
 
 ---
