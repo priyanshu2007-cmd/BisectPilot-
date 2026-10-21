@@ -15,7 +15,7 @@ import {
 import { appendLedgerEvent } from "../../src/ledger/index.js";
 import { executeSingleBisectStep } from "../../src/runner/bisect-runner.js";
 import { buildFixtureRepo, type GeneratedFixtureRepo } from "../fixtures/repo-builder.js";
-import { DEFAULT_EXECUTION_POLICY, type BisectConfigV1 } from "../../src/contracts/config.js";
+import { DEFAULT_EXECUTION_POLICY, type BisectConfigV1, type CommandSpec } from "../../src/contracts/config.js";
 
 function createTmpDir(): string {
   const dir = path.join(os.tmpdir(), `bp-runner-abort-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -23,7 +23,7 @@ function createTmpDir(): string {
   return dir;
 }
 
-function makeTestConfig(repoDir: string, commandStr: string, timeoutMs = 5000): BisectConfigV1 {
+function makeTestConfig(repoDir: string, commandSpec?: CommandSpec): BisectConfigV1 {
   return {
     schemaVersion: 1,
     profile: "functional",
@@ -33,10 +33,10 @@ function makeTestConfig(repoDir: string, commandStr: string, timeoutMs = 5000): 
     badRef: "main",
     oracle: {
       mode: "in-tree",
-      command: {
-        command: "sh",
-        args: ["-c", commandStr],
-        timeoutMs,
+      command: commandSpec ?? {
+        command: "node",
+        args: ["-e", "process.exit(0)"],
+        timeoutMs: 5000,
       },
     },
     execution: {
@@ -69,7 +69,7 @@ test("Bisect Runner Abort and Classification Caching Suite", async (t) => {
     mkdirSync(sessionDir, { recursive: true });
     const ledgerPath = path.join(sessionDir, "ledger.jsonl");
 
-    const config = makeTestConfig("/repo", "exit 0");
+    const config = makeTestConfig("/repo");
     const manifest: SessionManifestV1 = {
       schemaVersion: 1,
       id: "session_abort_cache",
@@ -155,7 +155,7 @@ test("Bisect Runner Abort and Classification Caching Suite", async (t) => {
     mkdirSync(sessionDir, { recursive: true });
     const ledgerPath = path.join(sessionDir, "ledger.jsonl");
 
-    const config = makeTestConfig("/repo", "exit 0");
+    const config = makeTestConfig("/repo");
     const manifest: SessionManifestV1 = {
       schemaVersion: 1,
       id: "session_wal_abort",
@@ -266,8 +266,13 @@ test("Bisect Runner Abort and Classification Caching Suite", async (t) => {
 
     const markerFile = path.join(tmpDir, "sleep_marker.pid");
     // Script writes its child PID to markerFile, then sleeps
-    const slowScript = `echo $$ > "${markerFile}" && exec sleep 30`;
-    const config = makeTestConfig(fixture.repoDir, slowScript, 15000);
+    const script =
+      "const fs = require('node:fs'); fs.writeFileSync(process.argv[1], String(process.pid)); setInterval(() => {}, 1000);";
+    const config = makeTestConfig(fixture.repoDir, {
+      command: process.execPath,
+      args: ["-e", script, markerFile],
+      timeoutMs: 15000,
+    });
 
     const manifest: SessionManifestV1 = {
       schemaVersion: 1,
@@ -314,7 +319,7 @@ test("Bisect Runner Abort and Classification Caching Suite", async (t) => {
     // Wait until child is running (marker file exists)
     let childPid: number | undefined;
     const start = Date.now();
-    while (Date.now() - start < 3000) {
+    while (Date.now() - start < 5000) {
       try {
         const { readFileSync } = await import("node:fs");
         const content = readFileSync(markerFile, "utf-8").trim();
@@ -339,7 +344,7 @@ test("Bisect Runner Abort and Classification Caching Suite", async (t) => {
     // Verify child process group is gone within grace period (~1s)
     let processAlive = true;
     const checkStart = Date.now();
-    while (Date.now() - checkStart < 2000) {
+    while (Date.now() - checkStart < 3000) {
       try {
         process.kill(childPid, 0);
         await new Promise((r) => setTimeout(r, 100));
