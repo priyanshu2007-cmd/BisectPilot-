@@ -34,7 +34,7 @@ make run
 `make test` runs the TypeScript engine tests, Python tests, and website
 typecheck/lint/production build. `make run` performs a CLI smoke run and prints
 the command help. For an actual investigation, use the CLI workflow described
-in [Quick Start](#quick-start).
+in the [README Quick Start](../README.md#run-via-npx-no-install).
 
 ### Docker rebuild and smoke run
 
@@ -51,8 +51,6 @@ runs it as the non-root `node` user. The website is built by `make build` and
 runtime image.
 
 ---
-
-
 
 ## Python Helper and Website
 

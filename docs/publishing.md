@@ -51,19 +51,25 @@ When ready to publish a new release:
 
 1. **Bump Version**:
    Update `version` in `package.json` following semantic versioning:
+
    ```bash
    npm version 0.1.0 --no-git-tag-version
    ```
+
 2. **Update CHANGELOG**:
    Move items from `## [Unreleased]` to the new version heading `## [0.1.0] - YYYY-MM-DD`.
 3. **Commit & Tag**:
+
    ```bash
    git commit -am "chore(release): v0.1.0"
    git tag -a v0.1.0 -m "Release v0.1.0"
    ```
+
 4. **Push Release Tag**:
+
    ```bash
    git push origin main --tags
    ```
+
 5. **Monitor GitHub Actions**:
    The workflow at `.github/workflows/publish.yml` will automatically trigger on tag push `v*`, execute the full test suite and packaging checks, and publish to the target registry with build provenance.

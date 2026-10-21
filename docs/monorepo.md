@@ -1,6 +1,6 @@
 # Monorepo & Multi-Package Workspace Bisection
 
-### Monorepo Package Scoping (`--cwd` and `--scope`)
+## Monorepo Package Scoping (`--cwd` and `--scope`)
 
 When bisecting a regression inside a monorepo package:
 

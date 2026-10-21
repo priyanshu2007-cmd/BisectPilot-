@@ -1,6 +1,6 @@
 # Flaky & Noisy Test Bisection
 
-### Flaky / Noisy Test Bisection (`--noisy`)
+## Flaky / Noisy Test Bisection (`--noisy`)
 
 When a test fails intermittently on broken commits:
 

@@ -1,6 +1,6 @@
 # Performance Regression Bisection
 
-### Performance Regression Bisection (`--metric`)
+## Performance Regression Bisection (`--metric`)
 
 When investigating a latency or throughput regression rather than a pass/fail test failure:
 
