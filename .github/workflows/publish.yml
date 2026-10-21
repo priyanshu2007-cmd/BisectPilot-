@@ -17,6 +17,22 @@ on:
         description: "Target registry ('npm' or 'github')"
         required: false
         default: "github"
+  workflow_call:
+    inputs:
+      dry_run:
+        description: "Dry run (validate without publishing)"
+        required: false
+        type: boolean
+        default: false
+      registry:
+        description: "Target registry ('npm' or 'github')"
+        required: false
+        type: string
+        default: "github"
+    secrets:
+      NPM_TOKEN:
+        description: "npm access token for publishing to registry.npmjs.org"
+        required: false
 
 permissions:
   contents: read

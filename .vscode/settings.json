@@ -28,10 +28,5 @@
     "**/.venv/**": true,
     "**/.next/**": true,
     "graft/**": true
-  },
-  "github-actions.workflows.pinnedOptions": {
-    "repositorySecrets": [
-      "NPM_TOKEN"
-    ]
   }
 }
